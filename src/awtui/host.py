@@ -62,13 +62,18 @@ def powershell_bootstrap_handoff_command(
         raise ValueError("bootstrap_script must be an absolute remote path")
     if backend not in {"gui", "tui"}:
         raise ValueError("backend must be gui or tui")
-    script = "$env:TEMP\\awui-bootstrap-$([guid]::NewGuid().ToString('N')).ps1"
+    # Keep the displayed command short: one short-lived directory, positional
+    # arguments, and PowerShell aliases. The fetched script still performs all
+    # environment negotiation and GUI->TUI fallback.
+    script = "$env:TEMP\\a$([guid]::NewGuid().ToString('N'))"
+    event = str(remote_event_file) if remote_event_file and str(remote_event_file) != f"{remote_session_file}.events.jsonl" else None
+    tail = f" '{event}'" if event else ""
+    tail += f" {backend}" if backend != "gui" else ""
     return (
-        f"$f = \"{script}\"; ssh {ssh_host} \"cat -- '{bootstrap_script}'\" > $f; "
-        f"try {{ powershell -NoProfile -ExecutionPolicy Bypass -File $f "
-        f"-SshHost '{ssh_host}' -SessionFile '{remote_session_file}' "
-        f"-RemoteEventFile '{remote_event_file or f'{remote_session_file}.events.jsonl'}' -Backend {backend} }} "
-        f"finally {{ Remove-Item -Force $f -ErrorAction SilentlyContinue }}"
+        f"$d=\"{script}\";md $d|Out-Null; "
+        f"ssh {ssh_host} \"cat -- '{bootstrap_script}'\" > \"$d\\a.ps1\"; "
+        f"try {{ powershell -ep Bypass -f \"$d\\a.ps1\" '{ssh_host}' '{remote_session_file}'{tail} }} "
+        f"finally {{ ri $d -r -fo -ea 0 }}"
     )
 
 
@@ -84,12 +89,13 @@ def posix_bootstrap_handoff_command(
         raise ValueError("bootstrap_script must be an absolute remote path")
     if backend not in {"gui", "tui"}:
         raise ValueError("backend must be gui or tui")
+    event = str(remote_event_file) if remote_event_file and str(remote_event_file) != f"{remote_session_file}.events.jsonl" else None
+    tail = f" '{event}'" if event else ""
+    tail += f" {backend}" if backend != "gui" else ""
     return (
-        f"f=$(mktemp \"${{TMPDIR:-/tmp}}/awui-bootstrap.XXXXXX\"); "
-        f"trap 'rm -f \"$f\"' EXIT; ssh {ssh_host} \"cat -- '{bootstrap_script}'\" > \"$f\"; "
-        f"AWUI_SSH_HOST='{ssh_host}' AWUI_SESSION_FILE='{remote_session_file}' "
-        f"AWUI_REMOTE_EVENT_FILE='{remote_event_file or f'{remote_session_file}.events.jsonl'}' "
-        f"AWUI_BACKEND='{backend}' sh \"$f\""
+        f"d=$(mktemp -d);trap 'rm -rf \"$d\"' EXIT; "
+        f"ssh {ssh_host} \"cat -- '{bootstrap_script}'\" >\"$d/a\"; "
+        f"sh \"$d/a\" '{ssh_host}' '{remote_session_file}'{tail}"
     )
 
 

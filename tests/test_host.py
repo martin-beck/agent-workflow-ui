@@ -81,11 +81,11 @@ def test_powershell_bootstrap_fetches_remote_script_and_cleans_up():
     )
     assert "ssh ai-ws" in command
     assert "awui-bootstrap" in command
-    assert "-ExecutionPolicy Bypass" in command
-    assert "-SshHost 'ai-ws'" in command
-    assert "Remove-Item -Force" in command
+    assert "-ep Bypass" in command
+    assert "'ai-ws' '/srv/state/request.json'" in command
+    assert "ri $d -r -fo -ea 0" in command
     assert command.count("[guid]::NewGuid()") == 1
-    assert "-File $f" in command
+    assert "-f \"$d\\a.ps1\"" in command
 
 
 def test_powershell_bootstrap_rejects_unsafe_script_path():
@@ -101,9 +101,9 @@ def test_posix_bootstrap_detects_runtime_and_cleans_up():
         remote_session_file="/srv/state/request.json", backend="gui",
     )
     assert "mktemp" in command
-    assert "AWUI_BACKEND='gui'" in command
-    assert "AWUI_SSH_HOST='linux-box'" in command
-    assert "trap 'rm -f \"$f\"' EXIT" in command
+    assert "'linux-box' '/srv/state/request.json'" in command
+    assert "sh \"$d/a\" 'linux-box' '/srv/state/request.json'" in command
+    assert "trap 'rm -rf \"$d\"' EXIT" in command
 
 
 def test_handoff_message_prints_windows_round_trip_command():
@@ -124,12 +124,12 @@ def test_handoff_message_can_print_self_bootstrap_for_windows_and_posix():
               "client_capabilities": {"platform": "windows", "shell": "powershell", "gui_available": True}}
     message = handoff_message("manual", "/remote/request.json", summary="1 decision", remote=common)
     assert "self-bootstrapping" in message
-    assert "-ExecutionPolicy Bypass" in message
+    assert "-ep Bypass" in message
     common["client_capabilities"] = {"platform": "linux", "shell": "bash", "gui_available": True}
     common["bootstrap_script"] = "/srv/ui/tools/awui-bootstrap.sh"
     message = handoff_message("manual", "/remote/request.json", summary="1 decision", remote=common)
     assert "self-bootstrapping" in message
-    assert "AWUI_SSH_HOST='ai-ws'" in message
+    assert "'ai-ws' '/remote/request.json'" in message
 
 
 def test_handoff_rejects_unsafe_short_command_host():
