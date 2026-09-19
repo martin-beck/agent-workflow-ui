@@ -9,9 +9,9 @@ the authoritative request/result files on the SSH host.
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$SshHost,
-    [Parameter(Mandatory = $true)][string]$SessionFile,
-    [Parameter(Mandatory = $true)][string]$RemoteEventFile,
+    [string]$SshHost,
+    [string]$SessionFile,
+    [string]$RemoteEventFile,
     [ValidateSet('gui', 'tui')][string]$Backend = 'gui',
     [string]$Release = 'v0.4.12',
     [switch]$ProbeOnly
@@ -34,6 +34,9 @@ if (-not $python) {
 $facts.runtime = (& $python.Source --version 2>&1 | Out-String).Trim()
 Write-Verbose (($facts | ConvertTo-Json -Compress))
 if ($ProbeOnly) { $facts | ConvertTo-Json -Compress; exit 0 }
+if (-not $SshHost -or -not $SessionFile -or -not $RemoteEventFile) {
+    throw 'SshHost, SessionFile, and RemoteEventFile are required unless ProbeOnly is used.'
+}
 
 $runtimeRoot = Join-Path $env:TEMP ("awui-runtime-" + [guid]::NewGuid().ToString('N'))
 $venvPython = Join-Path $runtimeRoot 'Scripts\python.exe'
