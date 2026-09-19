@@ -77,7 +77,7 @@ function Install-Files {
         $url = "https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/$Release/tools/awui.ps1"
         $launcherText = (Invoke-WebRequest -UseBasicParsing -Uri $url).Content
     }
-    $expected = '86f9dd249263328d9a7e8532e4dd6439a454c815f52569de1d89e256b0e432ea'
+    $expected = 'd2031e2cf35a795a4badc820619620fa53ee969e7283074f30db1293dfbbaf7d'
     $actual = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($launcherText))).ToLowerInvariant()
     if ($actual -ne $expected) {
         throw 'Launcher hash validation failed; refusing installation.'
