@@ -25,6 +25,9 @@ jobs:
       - run: python -m pip install '.[capture]' pytest
       - run: python -m pip install '.[gui]'
       - run: python tools/build_runtime_archive.py "$RUNNER_TEMP/awui-runtime.tar.gz"
+      - name: Probe self-bootstrapping POSIX launcher
+        run: |
+          AWUI_SSH_HOST=probe AWUI_SESSION_FILE=/tmp/request.json AWUI_REMOTE_EVENT_FILE=/tmp/events.jsonl AWUI_PROBE_ONLY=1 sh tools/awui-bootstrap.sh
       - run: python tools/run_gui_screenshot.py
       - uses: actions/upload-artifact@v4
         with:

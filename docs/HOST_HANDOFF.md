@@ -50,6 +50,14 @@ and architecture, supports `--backend tui` for an explicit terminal fallback,
 and uses a temporary runtime directory for the request and response. See
 [`GUI_UX.md`](GUI_UX.md) for the complete handoff and reconciliation contract.
 
+If the controlling machine does not have the connector installed, the request's
+optional `host_handoff.bootstrap_script` points at a trusted absolute script on
+the authoritative host. The printed command fetches that script with the SSH
+config alias, detects local platform/architecture/distribution/runtime, creates
+a temporary virtual environment, installs the pinned release, prefers Qt GUI
+when usable, falls back to TUI when the GUI wheel or display is unavailable,
+uploads the event journal, and removes the temporary launcher/runtime.
+
 The alias is passed unchanged to OpenSSH, so the user's existing SSH config,
 ProxyJump, port, and identity settings are used. The remote event path is
 explicit and is never guessed from a local path.

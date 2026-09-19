@@ -7,7 +7,7 @@ from pathlib import Path
 
 AR = re.compile(r"^AR-[0-9]{4}$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
-EVENTS = {"acknowledge", "clarify", "select", "reject", "add-proposal", "safe-exit", "reopen", "reconciled"}
+EVENTS = {"acknowledge", "clarify", "select", "reject", "request-more-evidence", "add-proposal", "safe-exit", "reopen", "reconciled"}
 
 
 def check_context(value):
