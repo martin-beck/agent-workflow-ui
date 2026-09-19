@@ -13,7 +13,7 @@ param(
     [string]$SshHost = '',
     [string]$RemoteStateRoot = '',
     [ValidatePattern('^v[0-9]+\.[0-9]+\.[0-9]+$')]
-    [string]$Release = 'v0.4.14',
+    [string]$Release = 'v0.5.0',
     [switch]$Force,
     [string]$InstallRoot = ''
 )
