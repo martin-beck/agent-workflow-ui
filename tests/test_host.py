@@ -84,6 +84,8 @@ def test_powershell_bootstrap_fetches_remote_script_and_cleans_up():
     assert "-ExecutionPolicy Bypass" in command
     assert "-SshHost 'ai-ws'" in command
     assert "Remove-Item -Force" in command
+    assert command.count("[guid]::NewGuid()") == 1
+    assert "-File $f" in command
 
 
 def test_powershell_bootstrap_rejects_unsafe_script_path():

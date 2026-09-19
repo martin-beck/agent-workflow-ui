@@ -7,7 +7,7 @@ set -eu
 : "${AWUI_SESSION_FILE:?set AWUI_SESSION_FILE}"
 : "${AWUI_REMOTE_EVENT_FILE:?set AWUI_REMOTE_EVENT_FILE}"
 AWUI_BACKEND="${AWUI_BACKEND:-}"
-AWUI_RELEASE="${AWUI_RELEASE:-v0.4.12}"
+AWUI_RELEASE="${AWUI_RELEASE:-v0.4.13}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 ARCHITECTURE="$(uname -m 2>/dev/null || printf unknown)"
 KERNEL="$(uname -s 2>/dev/null || printf unknown)"
