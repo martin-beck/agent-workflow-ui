@@ -64,11 +64,11 @@ def powershell_bootstrap_handoff_command(
         raise ValueError("backend must be gui or tui")
     script = "$env:TEMP\\awui-bootstrap-$([guid]::NewGuid().ToString('N')).ps1"
     return (
-        f"ssh {ssh_host} \"cat -- '{bootstrap_script}'\" > \"{script}\"; "
-        f"try {{ powershell -NoProfile -ExecutionPolicy Bypass -File \"{script}\" "
+        f"$f = \"{script}\"; ssh {ssh_host} \"cat -- '{bootstrap_script}'\" > $f; "
+        f"try {{ powershell -NoProfile -ExecutionPolicy Bypass -File $f "
         f"-SshHost '{ssh_host}' -SessionFile '{remote_session_file}' "
         f"-RemoteEventFile '{remote_event_file or f'{remote_session_file}.events.jsonl'}' -Backend {backend} }} "
-        f"finally {{ Remove-Item -Force \"{script}\" -ErrorAction SilentlyContinue }}"
+        f"finally {{ Remove-Item -Force $f -ErrorAction SilentlyContinue }}"
     )
 
 
