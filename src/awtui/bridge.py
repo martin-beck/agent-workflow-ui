@@ -25,7 +25,7 @@ def apply_tui_response(ar: dict[str, Any], event: dict[str, Any], *, response_ev
     never marks implementation complete; it records only human disposition,
     selected proposal, and the resulting description/specification text.
     """
-    if event.get("event_type") not in {"select", "add-proposal", "clarify", "reject", "reopen", "reconciled"}:
+    if event.get("event_type") not in {"select", "add-proposal", "clarify", "reject", "request-more-evidence", "reopen", "reconciled"}:
         raise ValueError("event is not a decision response")
     payload = event.get("payload") or {}
     updated = dict(ar)

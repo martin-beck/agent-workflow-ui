@@ -28,6 +28,7 @@ class DecisionWindow:
         QtCore, QtGui, QtWidgets = _qt()
         self.QtCore, self.QtGui, self.QtWidgets = QtCore, QtGui, QtWidgets
         self.interaction = interaction
+        self._allow_close = False
         self.on_event = on_event
         self.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
         self.window = QtWidgets.QMainWindow()
@@ -90,6 +91,7 @@ class DecisionWindow:
         split.addWidget(right); split.setSizes([700, 420])
         root.addWidget(split, 1)
         self.window.setCentralWidget(central)
+        self.window.closeEvent = self._close_event
 
     def _select_point(self, index: int) -> None:
         if index >= 0:
@@ -114,7 +116,11 @@ class DecisionWindow:
         self._respond("select")
 
     def _request_evidence(self) -> None:
+        self.interaction.saved = False
         self.helper.setPlainText("More evidence requested for this decision. The Coordinator will keep it unresolved until evidence is supplied.")
+        if self.on_event is not None:
+            self.on_event({"event_type": "request-more-evidence", "point_id": self.interaction.point.point_id,
+                           "disposition": "request-more-evidence"})
 
     def _reopen(self) -> None:
         self.interaction.responses.pop(self.interaction.point.point_id, None)
@@ -134,6 +140,32 @@ class DecisionWindow:
         if self.on_event is not None:
             self.on_event({"event_type": "safe-exit", "point_id": self.interaction.point.point_id})
         self.window.close()
+
+    def _close_event(self, event: Any) -> None:
+        if self._allow_close:
+            event.accept(); return
+        missing = self.interaction.exit_requirements()
+        if not missing:
+            event.accept(); return
+        answer = self.QtWidgets.QMessageBox.question(
+            self.window, "Decision session not finished",
+            "The session still needs:\n• " + "\n• ".join(missing) +
+            "\n\nSave the current state and exit?",
+            self.QtWidgets.QMessageBox.StandardButton.Save |
+            self.QtWidgets.QMessageBox.StandardButton.Cancel |
+            self.QtWidgets.QMessageBox.StandardButton.Yes |
+            self.QtWidgets.QMessageBox.StandardButton.No,
+        )
+        if answer in {self.QtWidgets.QMessageBox.StandardButton.Save, self.QtWidgets.QMessageBox.StandardButton.Yes}:
+            self._save(); event.accept()
+        else:
+            event.ignore()
+
+    def close_without_prompt(self) -> None:
+        """Close a headless capture/test window without a user prompt."""
+        self._allow_close = True
+        self.window.close()
+        self.app.processEvents()
 
     def _edit(self) -> None:
         if not self.interaction.begin_edit_proposal():

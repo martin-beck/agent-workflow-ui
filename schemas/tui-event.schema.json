@@ -10,7 +10,7 @@
     "packet_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "session_id": {"type": "string", "minLength": 1},
     "sequence": {"type": "integer", "minimum": 1},
-    "event_type": {"enum": ["acknowledge", "clarify", "select", "reject", "add-proposal", "safe-exit", "reopen", "reconciled"]},
+    "event_type": {"enum": ["acknowledge", "clarify", "select", "reject", "request-more-evidence", "add-proposal", "safe-exit", "reopen", "reconciled"]},
     "payload": {"type": "object"}
   }
 }

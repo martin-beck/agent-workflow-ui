@@ -26,7 +26,7 @@ def main() -> int:
     window.app.processEvents()
     if not window.window.grab().save(str(target), "PNG"):
         raise RuntimeError("GUI screenshot could not be written")
-    window.window.close()
+    window.close_without_prompt()
     return 0
 
 

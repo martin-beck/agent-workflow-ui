@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import tarfile
+import re
 from pathlib import Path
 
 from .host import detect_ui_backend
@@ -43,6 +44,14 @@ def _run(command: list[str]) -> int:
     return subprocess.run(command, check=False).returncode
 
 
+def _validate_remote_path(value: str) -> str:
+    if not value or any(char in value for char in "\r\n\x00") or not value.startswith("/"):
+        raise ValueError("remote paths must be absolute single-line paths")
+    if ".." in Path(value).parts:
+        raise ValueError("remote paths must not contain traversal")
+    return value
+
+
 def connect(*, session_file: str, ssh_host: str | None = None,
             remote_event_file: str | None = None, backend: str | None = None) -> int:
     """Run the local GUI/TUI and return its revision-bound result.
@@ -53,6 +62,7 @@ def connect(*, session_file: str, ssh_host: str | None = None,
     bounded and injection-safe.
     """
     selected = backend or detect_ui_backend()
+    os.environ["AWUI_BACKEND"] = selected
     executable = "awui-live" if selected == "gui" else "awtui-live"
     runtime_root: Path | None = None
     if not shutil.which(executable) and os.environ.get("AWUI_RUNTIME_ARCHIVE"):
@@ -68,9 +78,11 @@ def connect(*, session_file: str, ssh_host: str | None = None,
         executable_argv = [os.environ.get("PYTHON", "python"), "-m", "awtui.launcher"] if selected == "gui" else [os.environ.get("PYTHON", "python"), "-m", "awtui.live"]
     else:
         executable_argv = [executable]
+    output_path = remote_event_file or f"{session_file}.events.jsonl"
     if not ssh_host:
-        return _run([*executable_argv, "--session-file", session_file])
-    remote_result = remote_event_file or f"{session_file}.events.jsonl"
+        return _run([*executable_argv, "--session-file", session_file, "--output-json", output_path])
+    session_file = _validate_remote_path(session_file)
+    remote_result = _validate_remote_path(remote_event_file or f"{session_file}.events.jsonl")
     with tempfile.TemporaryDirectory(prefix="awui-connect-") as directory:
         local_request = Path(directory) / "request.json"
         local_result = Path(directory) / "events.json"
@@ -79,9 +91,10 @@ def connect(*, session_file: str, ssh_host: str | None = None,
         if fetched.returncode != 0:
             return fetched.returncode
         result = _run([*executable_argv, "--session-file", str(local_request), "--output-json", str(local_result)])
+        journal = local_result.with_suffix(".events.jsonl")
         if result != 0 or not local_result.is_file():
             return result or 2
-        return _run(["scp", str(local_result), f"{ssh_host}:{remote_result}"])
+        return _run(["scp", "--", str(journal if journal.is_file() else local_result), f"{ssh_host}:{remote_result}"])
 
 
 def main() -> int:

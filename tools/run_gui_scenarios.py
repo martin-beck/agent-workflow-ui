@@ -42,7 +42,7 @@ def capture(root: Path = ROOT, output_dir: Path | None = None) -> list[Path]:
         target = out / f"{scenario['id']}.png"
         if not window.window.grab().save(str(target), "PNG"):
             raise RuntimeError(f"could not save GUI screenshot: {target}")
-        window.window.close()
+        window.close_without_prompt()
         window.app.processEvents()
         paths.append(target)
     return paths

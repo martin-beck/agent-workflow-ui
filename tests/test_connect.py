@@ -1,6 +1,7 @@
 import tarfile
 
-from awtui.connect import environment_fingerprint, bootstrap_runtime, runtime_archive_name
+import pytest
+from awtui.connect import environment_fingerprint, bootstrap_runtime, runtime_archive_name, _validate_remote_path
 
 
 def test_environment_fingerprint_has_portable_runtime_facts():
@@ -19,3 +20,9 @@ def test_runtime_archive_is_platform_specific_and_safely_extracted(tmp_path):
     destination = bootstrap_runtime(archive, tmp_path / "out")
     assert (destination / "bin/awui-live").is_file()
     assert runtime_archive_name({"platform": "windows", "architecture": "amd64"}) == "awui-windows-amd64.tar.gz"
+
+
+@pytest.mark.parametrize("path", ["relative.json", "/tmp/../escape", "/tmp/a\njson"])
+def test_remote_paths_fail_closed(path):
+    with pytest.raises(ValueError):
+        _validate_remote_path(path)

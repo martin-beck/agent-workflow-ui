@@ -60,6 +60,17 @@ jobs:
           sshd_pid=$!
           trap 'sudo kill "$sshd_pid"' EXIT
           python tools/run_ssh_roundtrip.py --host 127.0.0.1 --port 22222 --user awui-ci --identity "$RUNNER_TEMP/awui-ci-key" --remote-dir /tmp/awui-roundtrip --insecure-host-key-check
+      - name: Exercise GUI and TUI connector invocations over SSH
+        run: |
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf 'Host awui-e2e\n  HostName 127.0.0.1\n  Port 22222\n  User awui-ci\n  IdentityFile %s\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' "$RUNNER_TEMP/awui-ci-key" > "$HOME/.ssh/config"
+          chmod 600 "$HOME/.ssh/config"
+          remote_root=/tmp/awui-connect-e2e
+          ssh awui-e2e "mkdir -p $remote_root; printf '%s' '{\"project_id\":\"connect-e2e\",\"session_id\":\"connect-e2e-1\",\"ar\":{\"ar_id\":\"AR-0099\",\"task_revision\":4}}' > $remote_root/request.json"
+          python tools/run_connect_e2e.py --ssh-host awui-e2e --remote-request "$remote_root/request.json" --remote-result "$remote_root/gui-events.json" --backend gui
+          python tools/run_connect_e2e.py --ssh-host awui-e2e --remote-request "$remote_root/request.json" --remote-result "$remote_root/tui-events.json" --backend tui
+          ssh awui-e2e "test -s $remote_root/gui-events.json && test -s $remote_root/tui-events.json"
       - name: Fail on stale generated artifacts
         run: |
           git diff --check

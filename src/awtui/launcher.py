@@ -39,6 +39,8 @@ def main() -> int:
     # The console entry point is an explicit user choice.  This matters on
     # Windows, where a GUI has no DISPLAY/WAYLAND_DISPLAY environment.
     backend = backend_for_invocation(sys.argv[0])
+    if os.environ.get("AWUI_BACKEND") in {"gui", "tui"}:
+        backend = os.environ["AWUI_BACKEND"]
     if backend == "tui":
         from .live import main as tui_main
         argv = []
@@ -54,20 +56,26 @@ def main() -> int:
         from .gui import build_gui_application
         from .host import attach_session
         from .transport_io import read_json, write_json_file
+        from .host import append_event
         request = attach_session(args.session_file) if args.session_file else read_json(sys.stdin)
         if request.get("kind") != "coordinator-tui-request":
             parser.error("input is not a coordinator-tui-request")
         _context, decisions = envelope_requests_to_tui(request, project_id=request["project_id"], session_id=request["session_id"], documents=request.get("documents"))
         sequence = 0
+        event_log = args.output_json.with_suffix(".events.jsonl") if args.output_json else None
         def record_event(event: dict) -> None:
             nonlocal sequence
             sequence += 1
-            event = {**event, "project_id": request["project_id"],
+            payload = dict(event.get("payload") or {})
+            payload.update({key: event[key] for key in ("point_id", "disposition", "selected", "user_proposal") if key in event})
+            event = {**event, "payload": payload, "project_id": request["project_id"],
                      "ar_id": request.get("ar", {}).get("ar_id", ""),
                      "task_revision": request.get("ar", {}).get("task_revision", 0),
                      "session_id": request["session_id"], "sequence": sequence}
             if args.output_json:
                 write_json_file(event, args.output_json)
+            if event_log:
+                append_event(event_log, event)
         window = build_gui_application(
             design_document=(request.get("documents") or {}).get("design", "# Design\n\nAwaiting context"),
             workplan=(request.get("documents") or {}).get("workplan", "# Work plan\n\nAwaiting context"),
