@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-workflow.dev/schemas/decision-batch-token-1.0.json",
+  "title": "Agent Workflow UI decision batch token registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "tokens"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "tokens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["project_id", "session_id", "task_revision", "packet_digest", "session_file", "event_file", "ssh_host", "issued_at", "expires_at", "token_digest", "status"],
+        "properties": {
+          "project_id": {"type": "string", "minLength": 1},
+          "session_id": {"type": "string", "minLength": 1},
+          "task_revision": {"type": "integer", "minimum": 1},
+          "packet_digest": {"type": "string", "minLength": 1},
+          "session_file": {"type": "string", "minLength": 1},
+          "event_file": {"type": "string", "minLength": 1},
+          "ssh_host": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
+          "issued_at": {"type": "string", "format": "date-time"},
+          "expires_at": {"type": "string", "format": "date-time"},
+          "token_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "status": {"enum": ["active", "revoked"]}
+        }
+      }
+    }
+  }
+}
