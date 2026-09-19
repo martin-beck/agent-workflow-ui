@@ -17,6 +17,10 @@ param(
     [switch]$ProbeOnly
 )
 
+# Positional invocation is intentionally supported for the compact handoff
+# command:  awui-bootstrap.ps1 <ssh-host> <session-file> [event-file] [gui|tui]
+if ($SessionFile -and -not $RemoteEventFile) { $RemoteEventFile = "$SessionFile.events.jsonl" }
+
 $facts = [ordered]@{
     platform = [System.Environment]::OSVersion.Platform.ToString()
     architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()

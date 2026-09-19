@@ -3,6 +3,13 @@
 # the pinned release into the invoking Python environment and uses the module
 # entry point so a newly-created console-script directory need not be on PATH.
 set -eu
+if [ "${AWUI_PROBE_ONLY:-0}" != 1 ] && [ "$#" -ge 1 ]; then
+  : "${2:?usage: awui-bootstrap.sh <ssh-host> <session-file> [event-file] [gui|tui]}"
+  AWUI_SSH_HOST="$1"
+  AWUI_SESSION_FILE="$2"
+  if [ "$#" -ge 3 ]; then AWUI_REMOTE_EVENT_FILE="$3"; else AWUI_REMOTE_EVENT_FILE="$AWUI_SESSION_FILE.events.jsonl"; fi
+  if [ "$#" -ge 4 ]; then AWUI_BACKEND="$4"; fi
+fi
 : "${AWUI_SSH_HOST:?set AWUI_SSH_HOST}"
 : "${AWUI_SESSION_FILE:?set AWUI_SESSION_FILE}"
 : "${AWUI_REMOTE_EVENT_FILE:?set AWUI_REMOTE_EVENT_FILE}"
