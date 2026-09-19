@@ -37,9 +37,10 @@ case $action in
     uninstall|Uninstall) action=Uninstall ;; version|Version) action=Version ;;
     *) usage ;;
 esac
-case $release in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo 'invalid release tag' >&2; exit 2 ;; esac
+printf '%s\n' "$release" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || { echo 'invalid release tag' >&2; exit 2; }
 case $install_root in /*) ;; *) echo 'install root must be absolute' >&2; exit 2 ;; esac
 case $install_root in *[!A-Za-z0-9._/@+:-]*) echo 'install root contains unsafe characters' >&2; exit 2 ;; esac
+case $install_root in /|/bin|/etc|/home|/root|/usr|/var|/tmp) echo 'install root is too broad' >&2; exit 2 ;; esac
 
 bin=$install_root/bin
 runtime=$install_root/runtime
@@ -79,8 +80,7 @@ safe_alias "$ssh_host" || { echo 'SSH host must be an SSH config alias.' >&2; ex
 safe_root "$remote_root" || { echo 'remote state root must be an absolute safe path.' >&2; exit 2; }
 python_bin=${PYTHON_BIN:-python3}
 command -v "$python_bin" >/dev/null 2>&1 || { echo 'Python 3.11+ is required.' >&2; exit 1; }
-python_version=$($python_bin -c 'import sys; print("%d.%d" % sys.version_info[:2])')
-case $python_version in 3.11|3.12|3.13|3.14|3.15) ;; *) echo 'Python 3.11+ is required.' >&2; exit 1 ;; esac
+"$python_bin" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' || { echo 'Python 3.11+ is required.' >&2; exit 1; }
 
 umask 077
 mkdir -p -- "$bin"

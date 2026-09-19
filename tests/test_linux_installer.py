@@ -48,3 +48,10 @@ def test_posix_installer_rejects_unsafe_routing_values(tmp_path):
         )
         assert result.returncode != 0
 
+
+def test_posix_installer_rejects_broad_destructive_install_roots():
+    result = subprocess.run(
+        ["sh", str(ROOT / "tools/awui-install.sh"), "--action", "uninstall", "--install-root", "/"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode != 0
