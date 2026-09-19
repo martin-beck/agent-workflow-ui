@@ -11,6 +11,8 @@ from awtui.host import (
     write_session_file,
     client_capabilities,
     powershell_ssh_handoff_command,
+    powershell_bootstrap_handoff_command,
+    posix_bootstrap_handoff_command,
 )
 
 
@@ -72,6 +74,36 @@ def test_powershell_ssh_round_trip_uses_config_alias_and_remote_result():
         powershell_ssh_handoff_command(ssh_host="bad;host", remote_session_file="/tmp/x")
 
 
+def test_powershell_bootstrap_fetches_remote_script_and_cleans_up():
+    command = powershell_bootstrap_handoff_command(
+        ssh_host="ai-ws", bootstrap_script="/srv/data/projects/agent-workflow-tui/tools/awui-bootstrap.ps1",
+        remote_session_file="/srv/state/request.json", remote_event_file="/srv/state/events.jsonl",
+    )
+    assert "ssh ai-ws" in command
+    assert "awui-bootstrap" in command
+    assert "-ExecutionPolicy Bypass" in command
+    assert "-SshHost 'ai-ws'" in command
+    assert "Remove-Item -Force" in command
+
+
+def test_powershell_bootstrap_rejects_unsafe_script_path():
+    with pytest.raises(ValueError):
+        powershell_bootstrap_handoff_command(
+            ssh_host="ai-ws", bootstrap_script="tools/awui-bootstrap.ps1", remote_session_file="/srv/state/request.json",
+        )
+
+
+def test_posix_bootstrap_detects_runtime_and_cleans_up():
+    command = posix_bootstrap_handoff_command(
+        ssh_host="linux-box", bootstrap_script="/srv/agent-workflow-ui/tools/awui-bootstrap.sh",
+        remote_session_file="/srv/state/request.json", backend="gui",
+    )
+    assert "mktemp" in command
+    assert "AWUI_BACKEND='gui'" in command
+    assert "AWUI_SSH_HOST='linux-box'" in command
+    assert "trap 'rm -f \"$f\"' EXIT" in command
+
+
 def test_handoff_message_prints_windows_round_trip_command():
     message = handoff_message(
         "manual", "/remote/request.json", summary="2 decisions",
@@ -82,6 +114,20 @@ def test_handoff_message_prints_windows_round_trip_command():
     assert "Windows PowerShell" in message
     assert "awui-connect --ssh-host build-box" in message
     assert "--remote-event-file '/remote/events.json'" in message
+
+
+def test_handoff_message_can_print_self_bootstrap_for_windows_and_posix():
+    common = {"ssh_host": "ai-ws", "session_file": "/remote/request.json",
+              "event_file": "/remote/events.json", "bootstrap_script": "/srv/ui/tools/awui-bootstrap.ps1",
+              "client_capabilities": {"platform": "windows", "shell": "powershell", "gui_available": True}}
+    message = handoff_message("manual", "/remote/request.json", summary="1 decision", remote=common)
+    assert "self-bootstrapping" in message
+    assert "-ExecutionPolicy Bypass" in message
+    common["client_capabilities"] = {"platform": "linux", "shell": "bash", "gui_available": True}
+    common["bootstrap_script"] = "/srv/ui/tools/awui-bootstrap.sh"
+    message = handoff_message("manual", "/remote/request.json", summary="1 decision", remote=common)
+    assert "self-bootstrapping" in message
+    assert "AWUI_SSH_HOST='ai-ws'" in message
 
 
 def test_handoff_rejects_unsafe_short_command_host():

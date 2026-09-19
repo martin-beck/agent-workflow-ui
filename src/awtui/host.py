@@ -45,6 +45,54 @@ def powershell_ssh_handoff_command(
     )
 
 
+def powershell_bootstrap_handoff_command(
+    *, ssh_host: str, bootstrap_script: str, remote_session_file: str | Path,
+    remote_event_file: str | Path | None = None, backend: str = "gui",
+) -> str:
+    """Fetch and execute the trusted bootstrap script from the SSH host.
+
+    The controlling Windows machine needs only OpenSSH, PowerShell, and a
+    Python launcher.  The script itself installs the pinned GUI/TUI package
+    temporarily through the module entry point, avoiding a PATH dependency.
+    """
+    values = (ssh_host, bootstrap_script, str(remote_session_file), str(remote_event_file or f"{remote_session_file}.events.jsonl"))
+    if not ssh_host or any(any(ch in value for ch in "\r\n;&|`$") for value in values):
+        raise ValueError("bootstrap handoff values must be plain single-line arguments")
+    if not str(bootstrap_script).startswith("/"):
+        raise ValueError("bootstrap_script must be an absolute remote path")
+    if backend not in {"gui", "tui"}:
+        raise ValueError("backend must be gui or tui")
+    script = "$env:TEMP\\awui-bootstrap-$([guid]::NewGuid().ToString('N')).ps1"
+    return (
+        f"ssh {ssh_host} \"cat -- '{bootstrap_script}'\" > \"{script}\"; "
+        f"try {{ powershell -NoProfile -ExecutionPolicy Bypass -File \"{script}\" "
+        f"-SshHost '{ssh_host}' -SessionFile '{remote_session_file}' "
+        f"-RemoteEventFile '{remote_event_file or f'{remote_session_file}.events.jsonl'}' -Backend {backend} }} "
+        f"finally {{ Remove-Item -Force \"{script}\" -ErrorAction SilentlyContinue }}"
+    )
+
+
+def posix_bootstrap_handoff_command(
+    *, ssh_host: str, bootstrap_script: str, remote_session_file: str | Path,
+    remote_event_file: str | Path | None = None, backend: str = "gui",
+) -> str:
+    """Fetch and execute the matching POSIX bootstrap script over SSH."""
+    values = (ssh_host, bootstrap_script, str(remote_session_file), str(remote_event_file or f"{remote_session_file}.events.jsonl"))
+    if not ssh_host or any(any(ch in value for ch in "\r\n;&|`$") for value in values):
+        raise ValueError("bootstrap handoff values must be plain single-line arguments")
+    if not str(bootstrap_script).startswith("/"):
+        raise ValueError("bootstrap_script must be an absolute remote path")
+    if backend not in {"gui", "tui"}:
+        raise ValueError("backend must be gui or tui")
+    return (
+        f"f=$(mktemp \"${{TMPDIR:-/tmp}}/awui-bootstrap.XXXXXX\"); "
+        f"trap 'rm -f \"$f\"' EXIT; ssh {ssh_host} \"cat -- '{bootstrap_script}'\" > \"$f\"; "
+        f"AWUI_SSH_HOST='{ssh_host}' AWUI_SESSION_FILE='{remote_session_file}' "
+        f"AWUI_REMOTE_EVENT_FILE='{remote_event_file or f'{remote_session_file}.events.jsonl'}' "
+        f"AWUI_BACKEND='{backend}' sh \"$f\""
+    )
+
+
 def client_capabilities(*, environ: dict[str, str] | None = None) -> dict[str, str | bool]:
     """Return explicit client facts; SSH does not expose the client OS."""
     env = os.environ if environ is None else environ
@@ -179,6 +227,12 @@ def handoff_message(mode: str, session_file: str | Path, *, summary: str, remote
             backend = str(remote.get("backend") or ("gui" if capabilities.get("gui_available", True) else "tui"))
             remote_request = str(remote.get("session_file", session_file))
             remote_result = str(remote.get("event_file") or f"{remote_request}.events.jsonl")
+            if remote.get("bootstrap_script"):
+                command = powershell_bootstrap_handoff_command(
+                    ssh_host=str(remote["ssh_host"]), bootstrap_script=str(remote["bootstrap_script"]),
+                    remote_session_file=remote_request, remote_event_file=remote_result, backend=backend,
+                )
+                return f"HUMAN DECISION REQUIRED\n{summary}\nRun in Windows PowerShell (self-bootstrapping):\n  {command}\nWaiting for Coordinator acceptance."
             # The installed connector performs capability detection, request
             # transfer, UI selection, and result upload. Keep the agent's
             # handoff short; the user's SSH config remains authoritative.
@@ -191,6 +245,12 @@ def handoff_message(mode: str, session_file: str | Path, *, summary: str, remote
             backend = str(remote.get("backend") or ("gui" if capabilities.get("gui_available", True) else "tui"))
             remote_request = str(remote.get("session_file", session_file))
             remote_result = str(remote.get("event_file") or f"{remote_request}.events.jsonl")
+            if remote.get("bootstrap_script"):
+                command = posix_bootstrap_handoff_command(
+                    ssh_host=str(remote["ssh_host"]), bootstrap_script=str(remote["bootstrap_script"]),
+                    remote_session_file=remote_request, remote_event_file=remote_result, backend=backend,
+                )
+                return f"HUMAN DECISION REQUIRED\n{summary}\nRun in the user-controlled terminal (self-bootstrapping):\n  {command}\nWaiting for Coordinator acceptance."
             command = f"awui-connect --ssh-host {remote['ssh_host']} --session-file '{remote_request}' --remote-event-file '{remote_result}' --backend {backend}"
             return f"HUMAN DECISION REQUIRED\n{summary}\nRun in the user-controlled terminal:\n  {command}\nWaiting for Coordinator acceptance."
     executable = "awui-live" if backend == "gui" else "awtui-live"

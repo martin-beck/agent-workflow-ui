@@ -17,6 +17,8 @@
         "ssh_host": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
         "remote_session_file": {"type": "string", "minLength": 1},
         "remote_event_file": {"type": "string", "minLength": 1},
+        "bootstrap_script": {"type": "string", "pattern": "^/[^\\r\\n]*$"},
+        "runtime_release": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
         "client_capabilities": {
           "type": "object", "additionalProperties": false,
           "required": ["platform", "shell"],
@@ -24,7 +26,10 @@
             "platform": {"enum": ["windows", "linux", "macos", "freebsd"]},
             "shell": {"enum": ["powershell", "cmd", "bash", "zsh", "sh"]},
             "ssh_config": {"type": "string", "minLength": 1},
-            "gui_available": {"type": "boolean"}
+            "gui_available": {"type": "boolean"},
+            "architecture": {"type": "string", "minLength": 1},
+            "distribution": {"type": "string", "minLength": 1},
+            "runtime": {"type": "string", "minLength": 1}
           }
         }
       }
