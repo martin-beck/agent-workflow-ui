@@ -31,9 +31,12 @@ is supplied by the Coordinator for the selected release. The launcher supports
 these maintenance operations:
 
 ```text
-awui --version
-awui --repair
-awui --uninstall
+awui-install.ps1 -Action Version
+awui-install.ps1 -Action Repair
+awui-install.ps1 -Action Uninstall
+
+The `awui --version`, `awui --repair`, and `awui --uninstall` aliases are also
+accepted by the installed launcher.
 ```
 
 The install directory and cache are temporary-runtime inputs, not authority:
