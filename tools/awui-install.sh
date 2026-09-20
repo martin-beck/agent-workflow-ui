@@ -7,7 +7,7 @@ set -eu
 action=Install
 ssh_host=
 remote_root=
-release=v0.5.0
+release=v0.5.1
 install_root=${AWUI_INSTALL_ROOT:-${XDG_DATA_HOME:-${HOME:?}/.local/share}/agent-workflow-ui}
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
