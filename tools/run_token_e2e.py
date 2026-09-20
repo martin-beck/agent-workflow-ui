@@ -55,8 +55,7 @@ def qualify(*, ssh_host: str, remote_dir: str) -> dict[str, object]:
         _run(["scp", str(request_file), f"{ssh_host}:{remote_request}"])
         _run(["scp", str(registry), f"{ssh_host}:{remote_registry}"])
         _run(["ssh", ssh_host, "chmod", "600", remote_request, remote_registry])
-        shim = local / "awui-live"
-        shim.write_text(
+        shim_text = (
             "#!/usr/bin/env python3\n"
             "import json, pathlib, sys\n"
             "a=sys.argv\n"
@@ -67,10 +66,12 @@ def qualify(*, ssh_host: str, remote_dir: str) -> dict[str, object]:
             "'task_revision':data['ar']['task_revision'],'packet_digest':data['packet_digest'],"
             "'session_id':data['session_id'],'sequence':1,'event_type':'select',"
             "'payload':{'point_id':'p1','disposition':'select','selected_candidate':'candidate-a'}}\n"
-            "out.write_text(json.dumps(event)+'\\n')\n",
-            encoding="utf-8",
+            "out.write_text(json.dumps(event)+'\\n')\n"
         )
-        shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
+        for name in ("awui-live", "awtui-live"):
+            shim = local / name
+            shim.write_text(shim_text, encoding="utf-8")
+            shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
         old_path = os.environ.get("PATH", "")
         os.environ["PATH"] = f"{local}{os.pathsep}{old_path}"
         try:
