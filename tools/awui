@@ -1,0 +1,17 @@
+#!/bin/sh
+# Installed POSIX launcher.  Routing and credentials remain in config.json;
+# this wrapper only delegates to the pinned per-user virtualenv.
+set -eu
+self=$0
+if command -v readlink >/dev/null 2>&1 && readlink -f "$0" >/dev/null 2>&1; then self=$(readlink -f "$0")
+elif command -v realpath >/dev/null 2>&1; then self=$(realpath "$0")
+fi
+root=$(CDPATH= cd -- "$(dirname -- "$self")/.." && pwd)
+config=$root/config.json
+case ${1:-} in
+    --version) exec "$root/bin/awui-install.sh" --action version ;;
+    --repair) exec "$root/bin/awui-install.sh" --action repair ;;
+    --uninstall) exec "$root/bin/awui-install.sh" --action uninstall ;;
+esac
+[ -x "$root/runtime/bin/python" ] || { echo 'awui runtime is missing; run awui --repair.' >&2; exit 1; }
+exec "$root/runtime/bin/python" -m awtui.shortcut --config "$config" "$@"

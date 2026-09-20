@@ -39,6 +39,23 @@ The `awui --version`, `awui --repair`, and `awui --uninstall` aliases are also
 accepted by the installed launcher.
 ```
 
+On Linux and other POSIX systems, the equivalent no-admin one-time install is:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/v0.5.0/tools/awui-install.sh | sh
+```
+
+`wget` can be used when `curl` is unavailable:
+
+```sh
+wget -qO- https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/v0.5.0/tools/awui-install.sh | sh
+```
+
+The POSIX installer writes `~/.local/share/agent-workflow-ui`, links `awui`
+into `~/.local/bin`, validates the launcher SHA-256 for the selected release,
+creates a per-user Python virtual environment, and installs the GUI extra.
+Use `awui --repair`, `awui --version`, or `awui --uninstall` for maintenance.
+
 The install directory and cache are temporary-runtime inputs, not authority:
 SSH host aliases, ProxyJump, identity, and port are always resolved by the
 user's existing OpenSSH configuration.
