@@ -54,6 +54,7 @@ def qualify(*, ssh_host: str, remote_dir: str) -> dict[str, object]:
         _run(["ssh", ssh_host, "mkdir", "-p", f"{root}/.runtime"])
         _run(["scp", str(request_file), f"{ssh_host}:{remote_request}"])
         _run(["scp", str(registry), f"{ssh_host}:{remote_registry}"])
+        _run(["ssh", ssh_host, "chmod", "600", remote_request, remote_registry])
         shim = local / "awui-live"
         shim.write_text(
             "#!/usr/bin/env python3\n"
