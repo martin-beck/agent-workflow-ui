@@ -112,6 +112,9 @@ def connect(*, session_file: str, ssh_host: str | None = None,
             fetched = subprocess.run(["ssh", ssh_host, "cat", "--", session_file], stdout=stream, check=False)
         if fetched.returncode != 0:
             return fetched.returncode
+        # The live launcher rejects group/world-readable session packets;
+        # scp/ssh fetches must preserve that privacy boundary locally too.
+        os.chmod(local_request, 0o600)
         result = _run([*executable_argv, "--session-file", str(local_request), "--output-json", str(local_result)], env=runtime_env)
         journal = local_result.with_suffix(".events.jsonl")
         if result != 0 or not local_result.is_file():
