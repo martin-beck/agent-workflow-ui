@@ -45,3 +45,16 @@ def test_shortcut_consumes_only_after_successful_remote_journal(tmp_path, monkey
     config.write_text(json.dumps({"schema_version": "1", "ssh_host": "ai-ws", "remote_state_root": "/state"}))
     assert shortcut.run(config=config, token=token) == 0
     assert calls[-1] == ("ai-ws", "/state", token)
+
+
+def test_remote_finalization_falls_back_to_python_module(monkeypatch):
+    seen = []
+    class Result:
+        def __init__(self, code):
+            self.returncode = code
+    def run(argv, **kwargs):
+        seen.append(argv)
+        return Result(127 if len(seen) == 1 else 0)
+    monkeypatch.setattr(shortcut.subprocess, "run", run)
+    assert shortcut._consume_remote("ai-ws", "/state", "ABCDEFGH") == 0
+    assert seen[1][3:6] == ["-m", "awtui.tokenctl", "consume"]
