@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from awtui.tokens import TOKEN_LENGTH, TokenError, TokenStore, resolve_batch_token
+from awtui.tokens import TOKEN_LENGTH, TokenError, TokenStore, issue_for_batch, resolve_batch_token
 
 
 NOW = datetime(2026, 9, 20, tzinfo=timezone.utc)
@@ -60,3 +60,44 @@ def test_invalid_issue_inputs_and_unknown_tokens_are_rejected(tmp_path):
         issue(store, ttl_seconds=0)
     with pytest.raises(TokenError, match="unknown"):
         store.resolve("AAAAAAAA")
+
+
+def test_consumption_is_single_use_and_records_completion(tmp_path):
+    store = TokenStore(tmp_path / "tokens.json")
+    token = issue(store)
+    record = store.consume(token, ssh_host="ai-ws", now=NOW)
+    assert record.status == "consumed"
+    assert json.loads((tmp_path / "tokens.json").read_text())["tokens"][0]["status"] == "consumed"
+    with pytest.raises(TokenError, match="no longer active"):
+        store.consume(token, ssh_host="ai-ws", now=NOW)
+
+
+def test_failed_or_cancelled_sessions_remain_retryable(tmp_path):
+    store = TokenStore(tmp_path / "tokens.json")
+    token = issue(store)
+    assert store.resolve(token, ssh_host="ai-ws", now=NOW).status == "active"
+
+
+def test_consumption_rejects_wrong_host_and_expiry(tmp_path):
+    store = TokenStore(tmp_path / "tokens.json")
+    token = issue(store, ttl_seconds=1)
+    with pytest.raises(TokenError, match="ssh_host mismatch"):
+        store.consume(token, ssh_host="other", now=NOW)
+    with pytest.raises(TokenError, match="expired"):
+        store.consume(token, ssh_host="ai-ws", now=NOW + timedelta(seconds=1))
+
+
+def test_issue_for_batch_requires_complete_nonempty_packet(tmp_path):
+    request = {
+        "project_id": "demo", "session_id": "s1",
+        "ar": {"task_revision": 3},
+        "packet_digest": "sha256:" + "a" * 64,
+        "decisions": [{"point_id": "p1"}],
+    }
+    token = issue_for_batch(tmp_path / "tokens.json", request,
+                            session_file="/state/request.json",
+                            event_file="/state/events.jsonl", ssh_host="ai-ws", now=NOW)
+    assert len(token) == TOKEN_LENGTH
+    with pytest.raises(TokenError, match="at least one"):
+        issue_for_batch(tmp_path / "other.json", {**request, "decisions": []},
+                        session_file="/state/request.json", event_file="/state/events.jsonl", ssh_host="ai-ws")

@@ -23,7 +23,14 @@ the per-user launcher once from a trusted checkout or release tag; no
 administrator rights are required:
 
 ```powershell
-irm https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/v0.4.14/tools/awui-install.ps1 | iex
+irm https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/v0.5.1/tools/awui-install.ps1 | iex
+
+Configure the SSH alias and authoritative state root during installation (the
+values are routing metadata only):
+
+```powershell
+& "$env:LOCALAPPDATA\AgentWorkflowUI\bin\awui-install.ps1" -Action Repair -SshHost ai-ws -RemoteStateRoot /srv/data/projects/awc-malloc-state
+```
 ```
 
 The installer creates `%LOCALAPPDATA%\AgentWorkflowUI\config.json`, adds its

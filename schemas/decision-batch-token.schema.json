@@ -24,7 +24,8 @@
           "issued_at": {"type": "string", "format": "date-time"},
           "expires_at": {"type": "string", "format": "date-time"},
           "token_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-          "status": {"enum": ["active", "revoked"]}
+          "status": {"enum": ["active", "consumed", "revoked"]},
+          "consumed_at": {"type": "string", "format": "date-time"}
         }
       }
     }
