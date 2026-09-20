@@ -58,3 +58,12 @@ def test_remote_finalization_falls_back_to_python_module(monkeypatch):
     monkeypatch.setattr(shortcut.subprocess, "run", run)
     assert shortcut._consume_remote("ai-ws", "/state", "ABCDEFGH") == 0
     assert seen[1][3:6] == ["-m", "awtui.tokenctl", "consume"]
+
+
+def test_shortcut_reports_missing_remote_root_as_actionable_error(tmp_path, capsys):
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"schema_version": "1", "ssh_host": "ai-ws", "remote_state_root": ""}))
+    with pytest.raises(SystemExit) as error:
+        shortcut.main(["--config", str(config), "ABCDEFGH"])
+    assert error.value.code == 2
+    assert "remote state root" in capsys.readouterr().err

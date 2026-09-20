@@ -100,7 +100,11 @@ def main(argv: list[str] | None = None) -> int:
         host, token = args.values
     else:
         parser.error("use awui TOKEN or awui SSH_HOST TOKEN")
-    return run(config=args.config, token=token, ssh_host=host)
+    try:
+        return run(config=args.config, token=token, ssh_host=host)
+    except (OSError, ValueError, RuntimeError) as exc:
+        parser.error(str(exc))
+    return 2
 
 
 if __name__ == "__main__":
