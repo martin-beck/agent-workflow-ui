@@ -20,6 +20,7 @@ awui-live = "awtui.launcher:main"
 awtui-live = "awtui.live:main"
 awui-connect = "awtui.connect:main"
 awui = "awtui.shortcut:main"
+awui-token = "awtui.tokenctl:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]

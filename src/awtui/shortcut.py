@@ -53,6 +53,22 @@ def _registry(host: str, root: str) -> Path:
         raise
 
 
+def _consume_remote(host: str, root: str, token: str) -> int:
+    """Ask the authoritative host to atomically consume a completed token."""
+    remote = f"{_remote_path(root)}/.runtime/awui-tokens.json"
+    argv = ["ssh", host, "awui-token", "consume", "--registry", remote, "--token", token, "--ssh-host", host]
+    result = subprocess.run(argv, check=False)
+    if result.returncode == 0:
+        return 0
+    # A source checkout or a package-only authoritative host may not expose
+    # the console script; use the same installed module through Python.
+    fallback = subprocess.run(
+        ["ssh", host, "python3", "-m", "awtui.tokenctl", "consume", "--registry", remote, "--token", token, "--ssh-host", host],
+        check=False,
+    )
+    return fallback.returncode
+
+
 def run(*, config: str | Path, token: str, ssh_host: str | None = None) -> int:
     settings = _load_config(config)
     host = _host(ssh_host or str(settings.get("ssh_host", "")))
@@ -64,7 +80,13 @@ def run(*, config: str | Path, token: str, ssh_host: str | None = None) -> int:
         raise SystemExit(f"awui: {exc}") from exc
     finally:
         registry.unlink(missing_ok=True)
-    return connect(session_file=record.session_file, ssh_host=host, remote_event_file=record.event_file)
+    result = connect(session_file=record.session_file, ssh_host=host, remote_event_file=record.event_file)
+    if result != 0:
+        return result
+    consumed = _consume_remote(host, root, token)
+    if consumed != 0:
+        raise RuntimeError("decision journal was returned, but the authoritative token could not be consumed; retry finalization")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
