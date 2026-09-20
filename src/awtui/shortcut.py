@@ -78,7 +78,7 @@ with open(p+".lock","a+b") as lock:
  if datetime.datetime.now(datetime.timezone.utc)>=expires: raise SystemExit("batch token has expired")
  item["status"]="consumed"; item["consumed_at"]=datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00","Z")
  fd,tmp=tempfile.mkstemp(prefix="."+os.path.basename(p)+".",dir=os.path.dirname(p)); os.fchmod(fd,0o600)
- with os.fdopen(fd,"w",encoding="utf-8") as out: json.dump(data,out,sort_keys=True,indent=2); out.write("\\n"); out.flush(); os.fsync(out.fileno())
+ with os.fdopen(fd,"w",encoding="utf-8") as out: json.dump(data,out,sort_keys=True,indent=2); out.write("\n"); out.flush(); os.fsync(out.fileno())
  os.replace(tmp,p)'''
     fallback = subprocess.run(
         ["ssh", host, f"python3 -c {shlex.quote(finalizer)} -- {shlex.quote(remote)} {shlex.quote(token)} {shlex.quote(host)}"],
