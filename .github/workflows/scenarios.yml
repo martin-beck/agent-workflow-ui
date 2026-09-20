@@ -68,6 +68,7 @@ jobs:
           chmod 700 "$HOME/.ssh"
           printf 'Host awui-e2e\n  HostName 127.0.0.1\n  Port 22222\n  User awui-ci\n  IdentityFile %s\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' "$RUNNER_TEMP/awui-ci-key" > "$HOME/.ssh/config"
           chmod 600 "$HOME/.ssh/config"
+          python tools/run_token_e2e.py --ssh-host awui-e2e --remote-dir /tmp/awui-token-e2e
           remote_root=/tmp/awui-connect-e2e
           ssh awui-e2e "mkdir -p $remote_root; printf '%s' '{\"project_id\":\"connect-e2e\",\"session_id\":\"connect-e2e-1\",\"ar\":{\"ar_id\":\"AR-0099\",\"task_revision\":4}}' > $remote_root/request.json"
           python tools/run_connect_e2e.py --ssh-host awui-e2e --remote-request "$remote_root/request.json" --remote-result "$remote_root/gui-events.json" --backend gui
