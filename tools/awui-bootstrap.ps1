@@ -13,7 +13,7 @@ param(
     [string]$SessionFile,
     [string]$RemoteEventFile,
     [ValidateSet('gui', 'tui')][string]$Backend = 'gui',
-    [string]$Release = 'v0.5.1',
+    [string]$Release = 'v0.5.2',
     [switch]$ProbeOnly
 )
 

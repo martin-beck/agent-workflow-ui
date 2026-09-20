@@ -25,7 +25,7 @@ administrator rights are required:
 ```powershell
 $d = Join-Path $env:TEMP ("awui-install-" + [guid]::NewGuid().ToString('N') + '.ps1')
 try {
-  irm https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/v0.5.1/tools/awui-install.ps1 -OutFile $d
+  irm https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/v0.5.2/tools/awui-install.ps1 -OutFile $d
   & $d -Action Install -SshHost ai-ws -RemoteStateRoot /srv/data/projects/awc-malloc-state
 } finally { Remove-Item -Force $d -ErrorAction SilentlyContinue }
 
