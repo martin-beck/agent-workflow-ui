@@ -65,7 +65,7 @@ def _consume_remote(host: str, root: str, token: str) -> int:
     # console script. Use a bounded stdlib-only finalizer so remote hosts do
     # not need a pre-installed UI package merely to own the registry.
     finalizer = r'''import datetime,fcntl,hashlib,json,os,tempfile,sys
-p,t,h=sys.argv[1:]
+p,t,h=sys.argv[2:]
 if len(t)!=8 or any(c not in "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" for c in t): raise SystemExit("invalid token")
 with open(p+".lock","a+b") as lock:
  fcntl.flock(lock,fcntl.LOCK_EX)
