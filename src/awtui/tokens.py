@@ -142,11 +142,17 @@ class TokenStore:
         return record
 
     def revoke(self, token: str) -> None:
-        record = self.resolve(token)
+        if not isinstance(token, str) or len(token) != TOKEN_LENGTH or any(char not in _ALPHABET for char in token):
+            raise TokenError("invalid batch token")
+        digest = _digest(token)
         values = self._read()
+        matched = False
         for item in values:
-            if hmac.compare_digest(item.get("token_digest", ""), record.token_digest):
+            if hmac.compare_digest(item.get("token_digest", ""), digest):
                 item["status"] = "revoked"
+                matched = True
+        if not matched:
+            raise TokenError("unknown batch token")
         self._write(values)
 
     def _read(self) -> list[dict[str, Any]]:
