@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path, PurePosixPath
@@ -60,10 +61,27 @@ def _consume_remote(host: str, root: str, token: str) -> int:
     result = subprocess.run(argv, check=False)
     if result.returncode == 0:
         return 0
-    # A source checkout or a package-only authoritative host may not expose
-    # the console script; use the same installed module through Python.
+    # A source checkout or package-only authoritative host may not expose the
+    # console script. Use a bounded stdlib-only finalizer so remote hosts do
+    # not need a pre-installed UI package merely to own the registry.
+    finalizer = r'''import datetime,fcntl,hashlib,json,os,tempfile,sys
+p,t,h=sys.argv[1:]
+if len(t)!=8 or any(c not in "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" for c in t): raise SystemExit("invalid token")
+with open(p+".lock","a+b") as lock:
+ fcntl.flock(lock,fcntl.LOCK_EX)
+ with open(p,encoding="utf-8") as stream: data=json.load(stream)
+ item=next((x for x in data.get("tokens",[]) if x.get("token_digest")==hashlib.sha256(t.encode("ascii")).hexdigest()),None)
+ if item is None: raise SystemExit("unknown batch token")
+ if item.get("status")!="active": raise SystemExit("batch token is no longer active")
+ if item.get("ssh_host")!=h: raise SystemExit("batch token ssh_host mismatch")
+ expires=datetime.datetime.fromisoformat(item["expires_at"].replace("Z","+00:00"))
+ if datetime.datetime.now(datetime.timezone.utc)>=expires: raise SystemExit("batch token has expired")
+ item["status"]="consumed"; item["consumed_at"]=datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00","Z")
+ fd,tmp=tempfile.mkstemp(prefix="."+os.path.basename(p)+".",dir=os.path.dirname(p)); os.fchmod(fd,0o600)
+ with os.fdopen(fd,"w",encoding="utf-8") as out: json.dump(data,out,sort_keys=True,indent=2); out.write("\\n"); out.flush(); os.fsync(out.fileno())
+ os.replace(tmp,p)'''
     fallback = subprocess.run(
-        ["ssh", host, "python3", "-m", "awtui.tokenctl", "consume", "--registry", remote, "--token", token, "--ssh-host", host],
+        ["ssh", host, f"python3 -c {shlex.quote(finalizer)} -- {shlex.quote(remote)} {shlex.quote(token)} {shlex.quote(host)}"],
         check=False,
     )
     return fallback.returncode

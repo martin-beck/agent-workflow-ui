@@ -57,7 +57,8 @@ def test_remote_finalization_falls_back_to_python_module(monkeypatch):
         return Result(127 if len(seen) == 1 else 0)
     monkeypatch.setattr(shortcut.subprocess, "run", run)
     assert shortcut._consume_remote("ai-ws", "/state", "ABCDEFGH") == 0
-    assert seen[1][3:6] == ["-m", "awtui.tokenctl", "consume"]
+    assert seen[1][0:2] == ["ssh", "ai-ws"]
+    assert "python3 -c" in seen[1][2]
 
 
 def test_shortcut_reports_missing_remote_root_as_actionable_error(tmp_path, capsys):
