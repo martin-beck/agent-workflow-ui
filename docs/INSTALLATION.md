@@ -22,6 +22,15 @@ The compact decision command is `awui TOKEN` (or `awui HOST TOKEN`). Install
 the per-user launcher once from a trusted checkout or release tag; no
 administrator rights are required:
 
+The installer supports both a temporary script file and the short inline
+PowerShell form below. The inline form is safe because it still pins the
+release and validates the launcher hash before writing files:
+
+```powershell
+$s = irm https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/v0.5.2/tools/awui-install.ps1
+& ([scriptblock]::Create($s)) -Action Install -SshHost ai-ws -RemoteStateRoot /srv/data/projects/awc-malloc-state
+```
+
 ```powershell
 $d = Join-Path $env:TEMP ("awui-install-" + [guid]::NewGuid().ToString('N') + '.ps1')
 try {

@@ -66,9 +66,11 @@ function Install-Files {
         throw 'Python launcher ``py`` is required. Install Python 3.11+ and retry.'
     }
     New-Item -ItemType Directory -Path $bin -Force | Out-Null
-    $source = Join-Path $PSScriptRoot 'awui.ps1'
-    $cmdSource = Join-Path $PSScriptRoot 'awui.cmd'
-    if (Test-Path -LiteralPath $source) {
+    # `$PSScriptRoot` is empty when this file is evaluated via irm/iex or
+    # ScriptBlock::Create. Do not pass an empty path to Join-Path/Test-Path.
+    $source = if ($PSScriptRoot) { Join-Path $PSScriptRoot 'awui.ps1' } else { $null }
+    $cmdSource = if ($PSScriptRoot) { Join-Path $PSScriptRoot 'awui.cmd' } else { $null }
+    if ($source -and (Test-Path -LiteralPath $source)) {
         $launcherText = Get-Content -Raw -LiteralPath $source
     } else {
         # The normal one-time command downloads only this installer. Fetch the
@@ -84,7 +86,7 @@ function Install-Files {
     }
     Set-PrivateFile $launcherPath $launcherText
     Set-PrivateFile $cmdPath "@echo off`r`nsetlocal`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0awui.ps1`" %*`r`nexit /b %ERRORLEVEL%`r`n"
-    if (Test-Path -LiteralPath $PSCommandPath) {
+    if ($PSCommandPath -and (Test-Path -LiteralPath $PSCommandPath)) {
         Copy-Item -LiteralPath $PSCommandPath -Destination $installerPath -Force
     } else {
         # ``irm ... | iex`` has no script path. Preserve a repair/uninstall
