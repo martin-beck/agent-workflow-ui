@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from awtui.tokens import TOKEN_LENGTH, TokenError, TokenStore, issue_for_batch, resolve_batch_token
+from awtui.tokens import TOKEN_LENGTH, TokenError, TokenStore, issue_for_batch, publish_batch, resolve_batch_token
 
 
 NOW = datetime(2026, 9, 20, tzinfo=timezone.utc)
@@ -101,3 +101,45 @@ def test_issue_for_batch_requires_complete_nonempty_packet(tmp_path):
     with pytest.raises(TokenError, match="at least one"):
         issue_for_batch(tmp_path / "other.json", {**request, "decisions": []},
                         session_file="/state/request.json", event_file="/state/events.jsonl", ssh_host="ai-ws")
+
+
+def test_publish_batch_durably_binds_request_and_registry(tmp_path):
+    registry = tmp_path / ".runtime" / "awui-tokens.json"
+    request_path = tmp_path / ".runtime" / "awui-session.json"
+    request = {"project_id": "demo", "session_id": "batch-1", "ar": {"task_revision": 7},
+               "packet_digest": "sha256:" + "b" * 64,
+               "decisions": [{"point_id": "p1"}, {"point_id": "p2"}]}
+    token = publish_batch(registry, request_path, request, session_file=str(request_path),
+                          event_file=str(tmp_path / ".runtime" / "events.jsonl"),
+                          ssh_host="ai-ws", now=NOW)
+    assert json.loads(request_path.read_text()) == request
+    assert resolve_batch_token(registry, token, ssh_host="ai-ws", now=NOW).session_id == "batch-1"
+    assert oct(request_path.stat().st_mode & 0o777) == "0o600"
+    assert oct(registry.stat().st_mode & 0o777) == "0o600"
+    assert token not in registry.read_text()
+
+
+def test_publication_journal_recovers_partial_authority_restart(tmp_path):
+    registry = tmp_path / ".runtime" / "awui-tokens.json"
+    request_path = tmp_path / ".runtime" / "awui-session.json"
+    request = {"project_id": "demo", "session_id": "restart-1", "ar": {"task_revision": 2},
+               "packet_digest": "sha256:" + "c" * 64, "decisions": [{"point_id": "p1"}]}
+    token = publish_batch(registry, request_path, request, session_file=str(request_path),
+                          event_file="/state/events.jsonl", ssh_host="ai-ws", now=NOW)
+    journal = registry.with_name(f".{registry.name}.publication.json")
+    journal.write_text(json.dumps({"schema_version": 1, "request_path": str(request_path),
+                                   "registry_path": str(registry), "request": request,
+                                   "registry": json.loads(registry.read_text())}), encoding="utf-8")
+    request_path.unlink()
+    assert TokenStore(registry).resolve(token, ssh_host="ai-ws", now=NOW).session_id == "restart-1"
+    assert json.loads(request_path.read_text()) == request
+    assert not journal.exists()
+
+
+def test_publish_batch_rejects_relative_authority_paths(tmp_path):
+    request = {"project_id": "demo", "session_id": "s1", "ar": {"task_revision": 1},
+               "packet_digest": "sha256:" + "d" * 64, "decisions": [{"point_id": "p1"}]}
+    with pytest.raises(TokenError, match="absolute"):
+        publish_batch(tmp_path / "tokens.json", "request.json", request,
+                      session_file="/state/request.json", event_file="/state/events.jsonl",
+                      ssh_host="ai-ws")

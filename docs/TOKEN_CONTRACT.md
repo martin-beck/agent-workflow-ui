@@ -28,3 +28,21 @@ record = resolve_batch_token(".runtime/awui-tokens.json", token, ssh_host="ai-ws
 
 The launcher must use the resolved paths, not construct paths from the token.
 The token registry is private (`0600`) and updates are atomic.
+
+## Authoritative publication
+
+The Coordinator must publish a batch on the SSH authority with
+`awui-token publish`, rather than issue a token in a client-only checkout:
+
+```text
+awui-token publish --registry /state/.runtime/awui-tokens.json \
+  --request /tmp/batch.json --session-file /state/.runtime/awui-session.json \
+  --event-file /state/.runtime/awui-session.json.events.jsonl --ssh-host ai-ws
+```
+
+Publication uses a private write-ahead journal. It recovers the request and
+registry together after an authority restart, and the command must not print
+the returned token until both files are durable. The journal and request are
+also mode `0600`; the registry stores only the token digest. A transport or
+write failure leaves no usable user command and a later retry can safely
+publish the batch again.
