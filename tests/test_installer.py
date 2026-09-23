@@ -38,3 +38,25 @@ def test_installed_launcher_delegates_to_pinned_shortcut_with_config():
     assert "awtui.shortcut" in text
     assert "--config $config" in text
     assert "ValueFromRemainingArguments" in text
+
+
+def test_inline_scriptblock_never_uses_empty_script_paths():
+    """The documented irm/ScriptBlock::Create shape has no script path."""
+    text = (ROOT / "tools/awui-install.ps1").read_text(encoding="utf-8")
+    assert "$source = if ($PSScriptRoot)" in text
+    assert "if ($source -and (Test-Path -LiteralPath $source))" in text
+    assert "if ($PSCommandPath -and (Test-Path -LiteralPath $PSCommandPath))" in text
+    assert "Join-Path $PSScriptRoot" not in text.split("$source = if", 1)[0]
+
+
+def test_inline_bootstrap_harness_covers_install_repair_and_cleanup():
+    harness = (ROOT / "tests/powershell_inline_bootstrap.ps1").read_text(encoding="utf-8")
+    for marker in (
+        "ScriptBlock::Create",
+        "-Action Install",
+        "-Action Repair",
+        "-Action Version",
+        "-Action Uninstall",
+        "PSScriptRoot",
+    ):
+        assert marker in harness
