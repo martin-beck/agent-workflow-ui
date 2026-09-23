@@ -14,7 +14,14 @@ concurrency:
 
 jobs:
   host-and-contract-smoke:
+    strategy:
+      matrix:
+        # Hosted Windows provides the contract row; native ARM64 runners can
+        # use this same job without changing the qualification command.
+        architecture: [amd64, arm64]
     runs-on: windows-latest
+    env:
+      AWUI_EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,6 +37,7 @@ jobs:
       # It validates backend selection, manual handoff, private session files,
       # bounded append-only journals, and the revision-bound bridge contract.
       - run: python -m pytest -q tests/test_host.py tests/test_ui_selection.py tests/test_bridge.py tests/test_ssh_roundtrip.py
+      - run: python tools/qualify_windows.py --expected-architecture "${{ matrix.architecture }}"
       - run: python tools/run_gui_screenshot.py
         env:
           QT_QPA_PLATFORM: offscreen

@@ -15,9 +15,20 @@ from pathlib import Path
 from .host import detect_ui_backend
 
 
+def _normalise_architecture(value: str) -> str:
+    """Map platform spellings to the archive names used by the launcher."""
+    return {
+        "amd64": "amd64", "x86_64": "x86_64", "x64": "amd64",
+        "arm64": "arm64", "aarch64": "aarch64", "x86": "x86",
+        "i386": "x86", "i686": "x86",
+    }.get(value.lower(), value.lower())
+
+
 def environment_fingerprint() -> dict[str, str]:
-    """Return stable facts used by a future portable runtime bootstrap."""
-    return {"platform": platform.system().lower(), "architecture": platform.machine().lower(),
+    """Return stable facts used by a portable runtime bootstrap."""
+    raw_platform = platform.system().lower()
+    normalized_platform = {"win32": "windows", "cygwin": "windows", "darwin": "macos"}.get(raw_platform, raw_platform)
+    return {"platform": normalized_platform, "architecture": _normalise_architecture(platform.machine()),
             "python": platform.python_version(), "shell": os.environ.get("SHELL", "powershell" if os.name == "nt" else "sh")}
 
 
