@@ -442,7 +442,7 @@
       },
       {
         "path": "src/awtui/performance.py",
-        "sha256": "sha256:5fdd5a9e54a558e90f4e85ac6a41f717923ec8c17b24204798bb10a155e931fc"
+        "sha256": "sha256:55a4f4b3a60c9732157b4001c9daab7795448889c774fab434bd9a2fa7b22a13"
       },
       {
         "path": "src/awtui/persistence.py",
@@ -505,11 +505,11 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:ba82a9d59a94322b37a689cb49084da3979501a759aee32b9f6392eb3ad8d1fd"
+    "version": "sha256:ea55d31b689862fe10a2e894b36cb32427e7957293f8a7aa5fe6936a112602d9"
   },
   "schema_version": 1,
   "source_release": {
     "project": "agent-workflow-ui",
-    "version": "0.6.1"
+    "version": "0.6.2"
   }
 }

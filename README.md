@@ -1,6 +1,6 @@
 # Agent Workflow UI
 
-Release line: **v0.6.1** (the v0.6.0 dashboard/navigation baseline plus the
+Release line: **v0.6.2** (the v0.6.1 scale and release-hardening update plus the
 cross-platform bootstrap qualification and immutable compatibility release
 gates).
 
