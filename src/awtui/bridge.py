@@ -25,15 +25,20 @@ def apply_tui_response(ar: dict[str, Any], event: dict[str, Any], *, response_ev
     never marks implementation complete; it records only human disposition,
     selected proposal, and the resulting description/specification text.
     """
-    if event.get("event_type") not in {"select", "add-proposal", "clarify", "reject", "request-more-evidence", "reopen", "reconciled"}:
+    if event.get("event_type") not in {"directive", "select", "add-proposal", "clarify", "reject", "request-more-evidence", "reopen", "reconciled"}:
         raise ValueError("event is not a decision response")
     payload = event.get("payload") or {}
+    if event.get("event_type") == "directive" and (not isinstance(payload.get("directive"), str) or not payload["directive"].strip()):
+        raise ValueError("directive response requires non-empty directive text")
     updated = dict(ar)
     bridge = dict(ar.get("interaction", {}))
     disposition = payload.get("disposition", event["event_type"])
-    bridge.update({"schema_version": BRIDGE_VERSION, "decision_status": "resolved" if disposition in {"select", "selected", "reconciled"} else "pending", "interaction_required": disposition not in {"select", "selected", "reconciled"}, "last_response_event": response_event_ref})
+    resolved = disposition in {"directive", "select", "selected", "reconciled"}
+    bridge.update({"schema_version": BRIDGE_VERSION, "decision_status": "resolved" if resolved else "pending", "interaction_required": not resolved, "last_response_event": response_event_ref})
     updated["interaction"] = bridge
     updated["decision"] = {"request_id": payload.get("request_id", bridge.get("decision_request_ref")), "disposition": disposition, "selected_candidate": payload.get("selected_candidate"), "selected": payload.get("selected"), "user_proposal": payload.get("user_proposal")}
+    if disposition == "directive":
+        updated["directive"] = payload["directive"].strip()
     if "description" in payload:
         updated["description"] = payload["description"]
     if "specification" in payload:
@@ -49,7 +54,7 @@ def tui_to_coordinator_response(request: dict[str, Any], event: dict[str, Any], 
         raise ValueError("response session does not match request")
     payload = event.get("payload") or {}
     disposition = payload.get("disposition", event.get("event_type"))
-    resolved = disposition in {"select", "selected", "rejected", "reject", "reconciled"}
+    resolved = disposition in {"directive", "select", "selected", "rejected", "reject", "reconciled"}
     return {
         "schema_version": BRIDGE_VERSION,
         "kind": "coordinator-tui-response",
@@ -58,5 +63,5 @@ def tui_to_coordinator_response(request: dict[str, Any], event: dict[str, Any], 
         "task_revision": request["ar"]["task_revision"],
         "decision_request_ref": request["interaction"]["decision_request_ref"],
         "event": {"session_id": event["session_id"], "sequence": event["sequence"], "event_type": event["event_type"], "payload": payload},
-        "ar_update": {"decision_status": "resolved" if resolved else "pending", "ar_status": ar_status, "description_append": description_append, "specification_update": {"request_id": request["interaction"]["decision_request_ref"], "point_id": payload.get("point_id", request["interaction"]["decision_request_ref"]), "disposition": disposition, "selected_candidate": payload.get("selected_candidate"), "selected": payload.get("selected"), "user_proposal": payload.get("user_proposal")}},
+        "ar_update": {"decision_status": "resolved" if resolved else "pending", "ar_status": ar_status, "description_append": description_append, "specification_update": {"request_id": request["interaction"]["decision_request_ref"], "point_id": payload.get("point_id", request["interaction"]["decision_request_ref"]), "disposition": disposition, "directive": payload.get("directive"), "selected_candidate": payload.get("selected_candidate"), "selected": payload.get("selected"), "user_proposal": payload.get("user_proposal")}},
     }
