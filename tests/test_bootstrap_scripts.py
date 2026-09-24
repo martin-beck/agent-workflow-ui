@@ -11,6 +11,8 @@ def test_windows_bootstrap_negotiates_environment_uses_temp_runtime_and_cleans_u
         assert marker in text
     assert "agent-workflow-ui[gui]" in text
     assert "agent-workflow-ui @ https" in text
+    assert "RuntimeArchive" in text
+    assert "--resume" in text
 
 
 def test_posix_bootstrap_negotiates_architecture_distribution_display_and_cleanup():
@@ -20,3 +22,5 @@ def test_posix_bootstrap_negotiates_architecture_distribution_display_and_cleanu
         assert marker in text
     assert "agent-workflow-ui[gui]" in text
     assert "AWUI_BACKEND=tui" in text
+    assert "AWUI_RUNTIME_ARCHIVE" in text
+    assert "AWUI_RESUME" in text

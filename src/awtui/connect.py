@@ -10,6 +10,7 @@ import tempfile
 import tarfile
 import re
 import hashlib
+import uuid
 from pathlib import Path
 
 from .host import detect_ui_backend
@@ -78,6 +79,24 @@ def _validate_remote_path(value: str) -> str:
     return value
 
 
+def _validate_ssh_host(value: str) -> str:
+    """Validate an OpenSSH config alias without interpreting shell syntax."""
+    if not value or any(char in value for char in "\r\n\x00;&|`$<>\"' \t"):
+        raise ValueError("ssh_host must be a plain SSH config alias or host name")
+    return value
+
+
+def _transport(command: list[str], *, attempts: int) -> int:
+    """Run a transport command with bounded reconnect retries."""
+    for attempt in range(attempts):
+        result = subprocess.run(command, check=False)
+        if result.returncode == 0:
+            return 0
+        if attempt + 1 == attempts:
+            return result.returncode
+    return 1
+
+
 def connect(*, session_file: str, ssh_host: str | None = None,
             remote_event_file: str | None = None, backend: str | None = None) -> int:
     """Run the local GUI/TUI and return its revision-bound result.
@@ -92,6 +111,11 @@ def connect(*, session_file: str, ssh_host: str | None = None,
     executable = "awui-live" if selected == "gui" else "awtui-live"
     runtime_root: Path | None = None
     runtime_env = os.environ.copy()
+    # A reconnect deliberately reuses the same revision-bound request. The
+    # launcher can use this marker to restore its paused-session view without
+    # changing the request identity or bypassing Coordinator validation.
+    if os.environ.get("AWUI_CONNECT_RESUME") == "1":
+        runtime_env["AWUI_CONNECT_RESUME"] = "1"
     if not shutil.which(executable) and os.environ.get("AWUI_RUNTIME_ARCHIVE"):
         runtime_root = bootstrap_runtime(os.environ["AWUI_RUNTIME_ARCHIVE"], tempfile.mkdtemp(prefix="awui-runtime-"))
         # The archive is deliberately source-oriented and may not contain a
@@ -114,8 +138,13 @@ def connect(*, session_file: str, ssh_host: str | None = None,
     output_path = remote_event_file or f"{session_file}.events.jsonl"
     if not ssh_host:
         return _run([*executable_argv, "--session-file", session_file, "--output-json", output_path], env=runtime_env)
+    ssh_host = _validate_ssh_host(ssh_host)
     session_file = _validate_remote_path(session_file)
     remote_result = _validate_remote_path(remote_event_file or f"{session_file}.events.jsonl")
+    try:
+        reconnect_attempts = max(1, min(3, int(os.environ.get("AWUI_CONNECT_RETRIES", "2"))))
+    except ValueError as error:
+        raise ValueError("AWUI_CONNECT_RETRIES must be an integer") from error
     with tempfile.TemporaryDirectory(prefix="awui-connect-") as directory:
         local_request = Path(directory) / "request.json"
         local_result = Path(directory) / "events.json"
@@ -130,7 +159,18 @@ def connect(*, session_file: str, ssh_host: str | None = None,
         journal = local_result.with_suffix(".events.jsonl")
         if result != 0 or not local_result.is_file():
             return result or 2
-        return _run(["scp", "--", str(journal if journal.is_file() else local_result), f"{ssh_host}:{remote_result}"])
+        source = journal if journal.is_file() else local_result
+        # Upload to a unique sibling and publish with one remote rename. This
+        # prevents a reconnect or interrupted copy from exposing partial JSON.
+        remote_tmp = f"{remote_result}.tmp-{uuid.uuid4().hex}"
+        try:
+            code = _transport(["scp", "--", str(source), f"{ssh_host}:{remote_tmp}"], attempts=reconnect_attempts)
+            if code:
+                return code
+            return _transport(["ssh", ssh_host, "mv", "-f", "--", remote_tmp, remote_result], attempts=reconnect_attempts)
+        finally:
+            # A failed scp or mv must not leave private event material behind.
+            subprocess.run(["ssh", ssh_host, "rm", "-f", "--", remote_tmp], check=False)
 
 
 def main() -> int:
@@ -140,9 +180,12 @@ def main() -> int:
     parser.add_argument("--remote-event-file", help="Remote result path (defaults to SESSION.events.jsonl)")
     parser.add_argument("--backend", choices=("gui", "tui"), help="Override environment detection")
     parser.add_argument("--runtime-archive", help="Optional platform/architecture runtime archive for a temporary self-contained launch")
+    parser.add_argument("--resume", action="store_true", help="Reconnect to the same revision-bound request after an interrupted UI")
     args = parser.parse_args()
     if args.runtime_archive:
         os.environ["AWUI_RUNTIME_ARCHIVE"] = args.runtime_archive
+    if args.resume:
+        os.environ["AWUI_CONNECT_RESUME"] = "1"
     return connect(session_file=args.session_file, ssh_host=args.ssh_host,
                    remote_event_file=args.remote_event_file, backend=args.backend)
 

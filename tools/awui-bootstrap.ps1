@@ -13,8 +13,10 @@ param(
     [string]$SessionFile,
     [string]$RemoteEventFile,
     [ValidateSet('gui', 'tui')][string]$Backend = 'gui',
-    [string]$Release = 'v0.6.0',
-    [switch]$ProbeOnly
+[string]$Release = 'v0.6.0',
+[string]$RuntimeArchive,
+[switch]$Resume,
+[switch]$ProbeOnly
 )
 
 # Positional invocation is intentionally supported for the compact handoff
@@ -58,11 +60,18 @@ try {
         $Backend = 'tui'
     }
 
-    & $venvPython -m awtui.connect `
-        --ssh-host $SshHost `
-        --session-file $SessionFile `
-        --remote-event-file $RemoteEventFile `
-        --backend $Backend
+    # Equivalent argument list includes --backend $Backend while preserving
+    # PowerShell's array quoting for paths containing spaces.
+    $connectArgs = @(
+        '-m', 'awtui.connect',
+        '--ssh-host', $SshHost,
+        '--session-file', $SessionFile,
+        '--remote-event-file', $RemoteEventFile,
+        '--backend', $Backend
+    )
+    if ($RuntimeArchive) { $connectArgs += @('--runtime-archive', $RuntimeArchive) }
+    if ($Resume) { $connectArgs += '--resume' }
+    & $venvPython @connectArgs
     exit $LASTEXITCODE
 }
 finally {
