@@ -10,11 +10,13 @@ BRIDGE_VERSION = "1.0"
 
 def board_request(*, project_id: str, ar_id: str, task_revision: int,
                   packet_digest: str, rollup_revision: int,
-                  pages: list[dict[str, Any]]) -> dict[str, Any]:
+                  pages: list[dict[str, Any]], hierarchy: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Build the revision-bound company dashboard request envelope."""
-    return BoardRequest(project_id, ar_id, task_revision, packet_digest,
-                        rollup_revision,
-                        tuple(RollupPage.from_dict(page) for page in pages)).as_dict()
+    value = BoardRequest.from_dict({"schema_version": "1.0", "kind": "coordinator-board-request",
+        "project_id": project_id, "ar_id": ar_id, "task_revision": task_revision,
+        "packet_digest": packet_digest, "rollup_revision": rollup_revision,
+        "pages": pages, "hierarchy": hierarchy or []})
+    return value.as_dict()
 
 
 def board_response(request: dict[str, Any], *, page_id: str) -> dict[str, Any]:
