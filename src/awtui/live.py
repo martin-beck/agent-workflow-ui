@@ -20,6 +20,7 @@ from .actions import footer_text, help_text
 from .dashboard import BoardRequest, HierarchyNavigator, render_dashboard
 from .journal import render_paused_cards, resume_event
 from .persistence import DurableSessionPersistence
+from .anchors import resolve_occurrence
 
 RECORDED_CONTROLS = {"\n": "select", "\r": "select", "r": "reject", "c": "clarify", "m": "request-more-evidence", "a": "add-proposal", "s": "safe-exit", "o": "reopen"}
 
@@ -33,34 +34,55 @@ class _ActiveHighlightProcessor(Processor):
     their normal offsets.
     """
 
-    def __init__(self, phrase):
+    def __init__(self, phrase, target=None):
         self._phrase = phrase
+        self._target = target
 
     def apply_transformation(self, transformation_input):
-        phrase = (self._phrase() or "").casefold()
+        target = self._target() if self._target is not None else None
+        targets = target if isinstance(target, list) else ([target] if target else [])
+        if targets:
+            ranges = [(item[1], item[2], item[3], item[0].casefold()) for item in targets if item]
+        else:
+            ranges = [(None, None, None, (self._phrase() or "").casefold())]
         fragments = transformation_input.fragments
-        if not phrase:
+        if not any(item[3] for item in ranges):
             return Transformation(fragments)
         line = "".join(text for _style, text in fragments)
-        start = line.casefold().find(phrase)
-        if start < 0:
+        line_ranges = [(start, end) for line_no, start, end, phrase in ranges
+                       if (line_no is None or transformation_input.lineno == line_no)
+                       and start is not None and end is not None]
+        if not line_ranges:
+            # Legacy phrase-only processors retain first-match behavior.
+            phrase = ranges[0][3]
+            start = line.casefold().find(phrase)
+            line_ranges = [(start, start + len(phrase))] if start >= 0 else []
+        if not line_ranges:
             return Transformation(fragments)
-        end = start + len(phrase)
+        # Paint the union of all selected ranges in this line.  This preserves
+        # multi-fragment decisions without introducing marker characters.
+        selected = sorted((max(0, start), min(len(line), end)) for start, end in line_ranges if end > start)
+        if not selected:
+            return Transformation(fragments)
+        merged = []
+        for start, end in selected:
+            if merged and start <= merged[-1][1]: merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+            else: merged.append((start, end))
         transformed = []
         offset = 0
         for style, text in fragments:
             fragment_end = offset + len(text)
-            if fragment_end <= start or offset >= end:
+            if all(fragment_end <= start or offset >= end for start, end in merged):
                 transformed.append((style, text))
             else:
-                before = max(0, start - offset)
-                after = max(0, fragment_end - end)
-                if before:
-                    transformed.append((style, text[:before]))
-                match_end = len(text) - after if after else len(text)
-                transformed.append(("bg:ansigreen fg:ansiwhite bold", text[before:match_end]))
-                if after:
-                    transformed.append((style, text[-after:]))
+                cursor = offset
+                for start, end in merged:
+                    left, right = max(cursor, start), min(fragment_end, end)
+                    if right <= left: continue
+                    if left > cursor: transformed.append((style, text[cursor - offset:left - offset]))
+                    transformed.append(("bg:ansigreen fg:ansiwhite bold", text[left - offset:right - offset]))
+                    cursor = right
+                if cursor < fragment_end: transformed.append((style, text[cursor - offset:]))
             offset = fragment_end
         return Transformation(transformed)
 
@@ -97,6 +119,13 @@ class LiveInteraction:
     def active_highlight(self, document_mode: str | None = None) -> str:
         mode = document_mode or self.document_mode
         return self.point.document_highlights.get(mode, self.point.highlight or self.point.question)
+    def active_highlight_range(self, document_mode: str | None = None) -> dict[str, object] | None:
+        mode = document_mode or self.document_mode
+        ranges = self.point.highlight_ranges.get(mode, ())
+        return dict(ranges[0]) if ranges else None
+    def active_highlight_ranges(self, document_mode: str | None = None) -> tuple[dict[str, object], ...]:
+        mode = document_mode or self.document_mode
+        return tuple(dict(item) for item in self.point.highlight_ranges.get(mode, ()))
     def move_point(self, delta: int):
         visible = self.visible_points()
         if not visible: return
@@ -255,7 +284,8 @@ def _packet_from_decisions(decisions, design_document: str, workplan: str) -> Di
         proposals = tuple(Proposal(p.get("label", "Proposal"), p.get("rationale", "No rationale recorded"), float(p.get("confidence", .5)), p.get("tradeoffs", "No trade-offs recorded")) for p in raw.get("proposals", []))
         while len(proposals) < 2:
             proposals += (Proposal("Request evidence", "Gather missing evidence", .5, "Delays decision"),)
-        points.append(PacketPoint(raw["point_id"], raw.get("anchor", "document:1"), raw.get("question", "What should happen?"), proposals, raw.get("helper", raw.get("implications", "Review downstream implications")), raw.get("evidence_gap", ""), highlight=raw.get("highlight", raw.get("question", "")), document_highlights=dict(raw.get("highlights", {})), effective_from=str(raw.get("effective_from", "")), effective_until=str(raw.get("effective_until", "")), rollback_of=str(raw.get("rollback_of", "")), conflict_reason=str(raw.get("conflict_reason", "")), ar_ref=str(raw.get("ar_id", raw.get("ar_ref", ""))), group=str(raw.get("group", raw.get("decision_class", ""))), depends_on=tuple(raw.get("depends_on", ())), evidence_refs=tuple(raw.get("evidence_refs", ())), blocked_reason=str(raw.get("blocked_reason", ""))))
+        raw_ranges = {str(key): tuple(value) for key, value in raw.get("highlight_ranges", {}).items() if isinstance(value, (list, tuple))}
+        points.append(PacketPoint(raw["point_id"], raw.get("anchor", "document:1"), raw.get("question", "What should happen?"), proposals, raw.get("helper", raw.get("implications", "Review downstream implications")), raw.get("evidence_gap", ""), highlight=raw.get("highlight", raw.get("question", "")), document_highlights=dict(raw.get("highlights", {})), highlight_ranges=raw_ranges, effective_from=str(raw.get("effective_from", "")), effective_until=str(raw.get("effective_until", "")), rollback_of=str(raw.get("rollback_of", "")), conflict_reason=str(raw.get("conflict_reason", "")), ar_ref=str(raw.get("ar_id", raw.get("ar_ref", ""))), group=str(raw.get("group", raw.get("decision_class", ""))), depends_on=tuple(raw.get("depends_on", ())), evidence_refs=tuple(raw.get("evidence_refs", ())), blocked_reason=str(raw.get("blocked_reason", ""))))
     return DiscussionPacket("interactive", 1, tuple(points), "design")
 
 
@@ -300,11 +330,31 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     hierarchy = HierarchyNavigator(board) if board is not None and board.hierarchy else None
     interaction.proposal_edit_index = 0
     interaction.proposal_confirm = False
+    def active_target():
+        """Return the exact rendered line/column selected by the packet anchor."""
+        if not packet:
+            return None
+        phrase = interaction.active_highlight()
+        metadata = interaction.active_highlight_ranges()
+        document = workplan if interaction.document_mode == "workplan" else design_document
+        rendered = render_markdown(document)
+        prefix = "▶ ACTIVE DECISION ANCHOR: " + interaction.point.anchor + "\n▶ HIGHLIGHT TARGET\n\n"
+        targets = []
+        selected = metadata or ({"text": phrase, "occurrence": 0},)
+        for item in selected:
+            target_phrase = str(item.get("text", phrase))
+            match = resolve_occurrence(rendered, target_phrase, int(item.get("occurrence", 0)))
+            if match is None: continue
+            absolute = len(prefix) + match.start
+            line = prefix[:absolute].count("\n")
+            line_start = prefix.rfind("\n", 0, absolute) + 1
+            targets.append((target_phrase, line, absolute - line_start, absolute - line_start + len(target_phrase)))
+        return targets or None
     document_view = TextArea(
         text=render_markdown(design_document),
         read_only=True,
         scrollbar=True,
-        input_processors=[_ActiveHighlightProcessor(lambda: interaction.active_highlight() if packet else "")],
+        input_processors=[_ActiveHighlightProcessor(lambda: interaction.active_highlight() if packet else "", target=lambda: active_target())],
     )
     points_view = TextArea(text=interaction.render_points() if packet else points, read_only=True, scrollbar=True)
     helper_view = TextArea(text=interaction.render_helper() if packet else helper, read_only=True, scrollbar=True)
@@ -408,8 +458,10 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
             # Markdown (rather than inserting marker characters) preserves
             # valid Markdown/text while making the active phrase visibly
             # highlighted in every live terminal.
-            document_view.control.search_state.text = phrase
-            document_view.control.search_state.ignore_case = True
+            # The processor paints only the resolved range.  A prompt-toolkit
+            # search state would paint every repeated occurrence, defeating
+            # the anchor contract, so keep it empty.
+            document_view.control.search_state.text = ""
         else:
             document_view.text = rendered
             document_view.buffer.cursor_position = 0

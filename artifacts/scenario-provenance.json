@@ -369,6 +369,10 @@
         "sha256": "sha256:b2cd9ec5bc4e45a6e1667537b3c51e7fa2c1aa232919a047b1b65b39f85bfdd6"
       },
       {
+        "path": "src/awtui/anchors.py",
+        "sha256": "sha256:744190cd7ad0b657ae37bc3b18b2170a4a0f93877637294b8dd5e4b8be993035"
+      },
+      {
         "path": "src/awtui/app.py",
         "sha256": "sha256:39dd364994c035d72f97d8b8a0aac49c26b2403e4d02714983633a009dbf7025"
       },
@@ -402,15 +406,15 @@
       },
       {
         "path": "src/awtui/discussion.py",
-        "sha256": "sha256:40ac2233cb5abeea59a3eb1a98d6e72bf4a5f0b4c76f0d27082492936ac2a4cf"
+        "sha256": "sha256:cd27cdb9507d2bf3f9dd4c959e213d1df3f04f1da0dd56db86b7fac076c97ceb"
       },
       {
         "path": "src/awtui/graph.py",
-        "sha256": "sha256:70cd6b7a5fc7513526389dc9caab6ae89cd246e3680f2080094f18bd87350271"
+        "sha256": "sha256:fbe062d0b8ce47d33957bd4dbc3fd5bbc51b85e0e006088158ee2d1568fd3cf5"
       },
       {
         "path": "src/awtui/gui.py",
-        "sha256": "sha256:20a38e908ac7ba9ee66b898ad2d48085f63166b6211161abbd79f1d053e5c9a4"
+        "sha256": "sha256:c8e7c1ba77c8a07551174fb7e8b674af9ee97a0b81b9502e5472186018d4cab3"
       },
       {
         "path": "src/awtui/host.py",
@@ -426,7 +430,7 @@
       },
       {
         "path": "src/awtui/live.py",
-        "sha256": "sha256:0fd6ec92f77a160d615d06dd23f041c90185d1742efaaa679c1afe022d363b06"
+        "sha256": "sha256:b95ef42628eed0611f3d569b1d7c7d22313a8fca4e415ab301484ee02aecce55"
       },
       {
         "path": "src/awtui/markdown.py",
@@ -489,7 +493,7 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:1a0fa1f2fa451fa063af9a3b9131f5a9a93feef91961fbfb255f2d7e202d5c9a"
+    "version": "sha256:54d7bf02a5f64489ccad329265f5da841871b560e632bde41bc81f5c8c01eb60"
   },
   "schema_version": 1,
   "source_release": {
