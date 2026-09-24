@@ -111,6 +111,11 @@ def connect(*, session_file: str, ssh_host: str | None = None,
     executable = "awui-live" if selected == "gui" else "awtui-live"
     runtime_root: Path | None = None
     runtime_env = os.environ.copy()
+    # A reconnect deliberately reuses the same revision-bound request. The
+    # launcher can use this marker to restore its paused-session view without
+    # changing the request identity or bypassing Coordinator validation.
+    if os.environ.get("AWUI_CONNECT_RESUME") == "1":
+        runtime_env["AWUI_CONNECT_RESUME"] = "1"
     if not shutil.which(executable) and os.environ.get("AWUI_RUNTIME_ARCHIVE"):
         runtime_root = bootstrap_runtime(os.environ["AWUI_RUNTIME_ARCHIVE"], tempfile.mkdtemp(prefix="awui-runtime-"))
         # The archive is deliberately source-oriented and may not contain a
