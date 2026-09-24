@@ -19,6 +19,45 @@ class BoardRevisionMismatch(ValueError):
 
 
 @dataclass(frozen=True)
+class HierarchyNode:
+    """One bounded company/team/task node from a Coordinator rollup."""
+
+    node_id: str
+    title: str
+    kind: str
+    level: int
+    parent_id: str | None = None
+    status: str = "unknown"
+    completed: int = 0
+    total: int = 0
+    blocked: int = 0
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> HierarchyNode:
+        node_id, title, kind = (value.get(key) for key in ("node_id", "title", "kind"))
+        if not all(isinstance(item, str) and item for item in (node_id, title, kind)):
+            raise ValueError("hierarchy node identity is incomplete")
+        level = value.get("level")
+        if not isinstance(level, int) or level < 0:
+            raise ValueError("hierarchy node level must be non-negative")
+        parent = value.get("parent_id")
+        if parent is not None and (not isinstance(parent, str) or not parent):
+            raise ValueError("hierarchy parent_id must be text")
+        counters = {name: value.get(name, 0) for name in ("completed", "total", "blocked")}
+        if any(not isinstance(number, int) or number < 0 for number in counters.values()):
+            raise ValueError("hierarchy counters must be non-negative integers")
+        status = value.get("status", "unknown")
+        if not isinstance(status, str):
+            raise TypeError("hierarchy status must be text")
+        return cls(node_id, title, kind, level, parent, status, **counters)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"node_id": self.node_id, "title": self.title, "kind": self.kind,
+                "level": self.level, "parent_id": self.parent_id, "status": self.status,
+                "completed": self.completed, "total": self.total, "blocked": self.blocked}
+
+
+@dataclass(frozen=True)
 class RollupPage:
     page_id: str
     title: str
@@ -59,6 +98,7 @@ class BoardRequest:
     packet_digest: str
     rollup_revision: int
     pages: tuple[RollupPage, ...]
+    hierarchy: tuple[HierarchyNode, ...] = ()
     schema_version: str = BOARD_SCHEMA_VERSION
     kind: str = "coordinator-board-request"
 
@@ -78,13 +118,77 @@ class BoardRequest:
         parsed = tuple(RollupPage.from_dict(page) for page in pages)
         if len({page.page_id for page in parsed}) != len(parsed):
             raise ValueError("rollup page ids must be unique")
-        return cls(value["project_id"], value["ar_id"], value["task_revision"], value["packet_digest"], value["rollup_revision"], parsed)
+        raw_hierarchy = value.get("hierarchy", [])
+        if not isinstance(raw_hierarchy, list):
+            raise ValueError("hierarchy must be an array")
+        hierarchy = tuple(HierarchyNode.from_dict(node) for node in raw_hierarchy)
+        _validate_hierarchy(hierarchy)
+        return cls(value["project_id"], value["ar_id"], value["task_revision"], value["packet_digest"], value["rollup_revision"], parsed, hierarchy)
 
     def as_dict(self) -> dict[str, Any]:
         return {"schema_version": self.schema_version, "kind": self.kind,
                 "project_id": self.project_id, "ar_id": self.ar_id,
                 "task_revision": self.task_revision, "packet_digest": self.packet_digest,
-                "rollup_revision": self.rollup_revision, "pages": [page.as_dict() for page in self.pages]}
+                "rollup_revision": self.rollup_revision, "pages": [page.as_dict() for page in self.pages],
+                "hierarchy": [node.as_dict() for node in self.hierarchy]}
+
+
+def _validate_hierarchy(nodes: tuple[HierarchyNode, ...], *, max_depth: int = 3) -> None:
+    by_id = {node.node_id: node for node in nodes}
+    if len(by_id) != len(nodes):
+        raise ValueError("hierarchy node ids must be unique")
+    if any(node.level > max_depth for node in nodes):
+        raise ValueError(f"hierarchy depth exceeds bound {max_depth}")
+    for node in nodes:
+        if node.parent_id is not None:
+            parent = by_id.get(node.parent_id)
+            if parent is None or parent.level != node.level - 1:
+                raise ValueError("hierarchy parent must be the immediately preceding level")
+    for node in nodes:
+        seen: set[str] = set()
+        current = node
+        while current.parent_id is not None:
+            if current.node_id in seen:
+                raise ValueError("hierarchy contains a cycle")
+            seen.add(current.node_id)
+            current = by_id[current.parent_id]
+
+
+class HierarchyNavigator:
+    """Bounded company -> team -> task navigation over one board snapshot."""
+
+    def __init__(self, request: BoardRequest):
+        self.request = request
+        self.current_id = next((node.node_id for node in request.hierarchy if node.parent_id is None), None)
+
+    @property
+    def current(self) -> HierarchyNode | None:
+        return next((node for node in self.request.hierarchy if node.node_id == self.current_id), None)
+
+    @property
+    def children(self) -> tuple[HierarchyNode, ...]:
+        return tuple(node for node in self.request.hierarchy if node.parent_id == self.current_id)
+
+    def drill_down(self, node_id: str | None = None) -> HierarchyNode:
+        candidate = node_id or (self.children[0].node_id if self.children else None)
+        if candidate is None or candidate not in {node.node_id for node in self.children}:
+            raise ValueError("node is not a child of the current hierarchy view")
+        self.current_id = candidate
+        return self.current  # type: ignore[return-value]
+
+    def drill_up(self) -> HierarchyNode | None:
+        current = self.current
+        if current is not None:
+            self.current_id = current.parent_id
+        return self.current
+
+    def response(self) -> dict[str, Any]:
+        if self.current is None:
+            raise ValueError("board has no hierarchy root")
+        return {"schema_version": BOARD_SCHEMA_VERSION, "kind": "coordinator-board-response",
+                "project_id": self.request.project_id, "ar_id": self.request.ar_id,
+                "task_revision": self.request.task_revision, "packet_digest": self.request.packet_digest,
+                "rollup_revision": self.request.rollup_revision, "page_id": self.current.node_id}
 
 
 def render_dashboard(request: BoardRequest) -> str:

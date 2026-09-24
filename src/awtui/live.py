@@ -16,7 +16,7 @@ from prompt_toolkit.widgets import Frame, TextArea
 from .discussion import DiscussionPacket, DecisionResponse, PacketPoint, Proposal
 from .markdown import render_markdown
 from .transport import LiveSessionTransport, EventAcknowledgement
-from .dashboard import BoardRequest, render_dashboard
+from .dashboard import BoardRequest, HierarchyNavigator, render_dashboard
 from .journal import render_paused_cards, resume_event
 
 RECORDED_CONTROLS = {"\n": "select", "\r": "select", "r": "reject", "c": "clarify", "m": "request-more-evidence", "a": "add-proposal", "s": "safe-exit", "o": "reopen"}
@@ -257,6 +257,7 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     packet = packet or (_packet_from_decisions(decisions, design_document, workplan) if decisions else None)
     interaction = LiveInteraction(packet or _default_packet(design_document, points), paused_sessions=paused_sessions)
     board = board_request if isinstance(board_request, BoardRequest) else (BoardRequest.from_dict(board_request) if board_request is not None else None)
+    hierarchy = HierarchyNavigator(board) if board is not None and board.hierarchy else None
     interaction.proposal_edit_index = 0
     interaction.proposal_confirm = False
     document_view = TextArea(
@@ -284,8 +285,15 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
         confirmation_view,
         filter=Condition(lambda: interaction.input_mode and interaction.proposal_confirm),
     )
-    dashboard_view = TextArea(text=render_dashboard(board) if board else "Company dashboard\nNo rollup supplied.", read_only=True, scrollbar=True)
-    footer = TextArea(text="↑/↓: decision  ←/→: proposal  tab/w/d: workplan/design  b: dashboard  page-up/page-down: scroll document  enter: select  r: reject  c: clarify  m: evidence  a: add  e: edit own  s: save  o: reopen  q: quit", read_only=True, height=1, style="class:footer")
+    def dashboard_text() -> str:
+        rendered = render_dashboard(board) if board else "Company dashboard\nNo rollup supplied."
+        if hierarchy is not None:
+            current = hierarchy.current
+            rendered += "\n\nHierarchy: " + (f"{current.title} ({current.kind})" if current else "none")
+            rendered += "\nChildren: " + (", ".join(child.title for child in hierarchy.children) or "none")
+        return rendered
+    dashboard_view = TextArea(text=dashboard_text(), read_only=True, scrollbar=True)
+    footer = TextArea(text="↑/↓: decision  ←/→: proposal  tab/w/d: workplan/design  b: dashboard  [/]: hierarchy up/down  page-up/page-down: scroll document  enter: select  r: reject  c: clarify  m: evidence  a: add  e: edit own  s: save  o: reopen  q: quit", read_only=True, height=1, style="class:footer")
     bindings = KeyBindings()
     def refresh():
         for field in editor_fields:
@@ -500,6 +508,21 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
         if not interaction.input_mode and board is not None:
             event.app.layout.focus(dashboard_view)
             if on_event is not None: on_event("dashboard")
+    @bindings.add("]")
+    def hierarchy_down(event):
+        if hierarchy is not None and not interaction.input_mode:
+            try:
+                hierarchy.drill_down()
+                dashboard_view.text = dashboard_text()
+                if on_event is not None: on_event("board-drill-down")
+            except ValueError:
+                pass
+    @bindings.add("[")
+    def hierarchy_up(event):
+        if hierarchy is not None and not interaction.input_mode:
+            hierarchy.drill_up()
+            dashboard_view.text = dashboard_text()
+            if on_event is not None: on_event("board-drill-up")
     @bindings.add("enter")
     def enter(event):
         if interaction.exit_confirm:
@@ -651,6 +674,7 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     application.awtui_panes = (document_view, points_view, helper_view)
     application.awtui_dashboard = dashboard_view
     application.awtui_board_request = board
+    application.awtui_hierarchy = hierarchy
     application.awtui_footer = footer
     application.awtui_layout_dimensions = {
         "document_row": document_row_height,
