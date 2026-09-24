@@ -4,6 +4,8 @@ These workflows are generated from `scenarios/corpus.json` and replayed through 
 
 Play a recording locally with `asciinema play docs/recordings/<scenario-id>.cast`.
 
+Freshness and public provenance are recorded in [`artifacts/scenario-provenance.json`](../artifacts/scenario-provenance.json).
+
 **Generated scenarios:** 29
 
 ## Select ranked option
