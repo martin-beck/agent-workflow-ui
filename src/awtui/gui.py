@@ -11,6 +11,7 @@ from typing import Any
 
 from .discussion import Proposal
 from .live import LiveInteraction, _default_packet, _packet_from_decisions
+from .actions import help_text
 from .persistence import DurableSessionPersistence
 
 
@@ -25,13 +26,13 @@ def _qt():
 class DecisionWindow:
     """Qt window exposing the complete batched decision interaction."""
 
-    def __init__(self, interaction: LiveInteraction, *, title: str = "Agent Workflow", on_event=None, transport=None) -> None:
+    def __init__(self, interaction: LiveInteraction, *, title: str = "Agent Workflow", on_event=None) -> None:
         QtCore, QtGui, QtWidgets = _qt()
         self.QtCore, self.QtGui, self.QtWidgets = QtCore, QtGui, QtWidgets
         self.interaction = interaction
         self._allow_close = False
         self.on_event = on_event
-        self.persistence = DurableSessionPersistence(interaction, transport=transport, on_event=on_event)
+        self.persistence = DurableSessionPersistence(interaction, on_event=on_event)
         self.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
         self.window = QtWidgets.QMainWindow()
         self.window.setWindowTitle(title)
@@ -53,6 +54,7 @@ class DecisionWindow:
             "QToolTip { background:#f5f7fb; color:#172235; border:1px solid #6d89a8; padding:6px; }"
         )
         self._build()
+        self._install_shortcuts()
         self._refresh()
 
     def _build(self) -> None:
@@ -88,12 +90,58 @@ class DecisionWindow:
         bottom = QtWidgets.QHBoxLayout()
         self.document_button = QtWidgets.QPushButton("Switch document"); self.document_button.setAccessibleName("Switch document"); self.document_button.setToolTip("Switch the active document view between Design and Work plan."); self.document_button.clicked.connect(self._switch_document); bottom.addWidget(self.document_button)
         save = QtWidgets.QPushButton("Save"); save.setAccessibleName("Save"); save.setToolTip("Persist the current selections to the revision-bound event journal."); save.clicked.connect(self._save); bottom.addWidget(save)
+        self.help_button = QtWidgets.QPushButton("Help (?)"); self.help_button.setAccessibleName("Keyboard and accessibility help"); self.help_button.setToolTip("Show the complete keyboard map, focus order, and editing guidance."); self.help_button.clicked.connect(self._show_help); bottom.addWidget(self.help_button)
         exit_button = QtWidgets.QPushButton("Save + Exit"); exit_button.setAccessibleName("Save and exit"); exit_button.setObjectName("primaryAction"); exit_button.setToolTip("Save all current selections and close the decision session."); exit_button.clicked.connect(self._save_exit); bottom.addWidget(exit_button)
         right_layout.addLayout(bottom)
         split.addWidget(right); split.setSizes([700, 420])
         root.addWidget(split, 1)
         self.window.setCentralWidget(central)
         self.window.closeEvent = self._close_event
+
+    def _install_shortcuts(self) -> None:
+        """Install the shared action map without stealing typed editor input."""
+        QtGui = self.QtGui
+        self._shortcuts = []
+        bindings = {
+            "?": self._show_help,
+            "Up": lambda: self._move_point(-1),
+            "Down": lambda: self._move_point(1),
+            "Left": lambda: self._move_proposal(-1),
+            "Right": lambda: self._move_proposal(1),
+            "PageUp": lambda: self._scroll_documents(-1),
+            "PageDown": lambda: self._scroll_documents(1),
+        }
+        for sequence, callback in bindings.items():
+            shortcut = QtGui.QShortcut(QtGui.QKeySequence(sequence), self.window)
+            shortcut.setContext(self.QtCore.Qt.ShortcutContext.WindowShortcut)
+            shortcut.activated.connect(callback)
+            self._shortcuts.append(shortcut)
+
+    def _editing(self) -> bool:
+        return isinstance(self.app.focusWidget(), self.QtWidgets.QLineEdit)
+
+    def _move_point(self, delta: int) -> None:
+        if self._editing(): return
+        self.interaction.move_point(delta); self._refresh()
+
+    def _move_proposal(self, delta: int) -> None:
+        if self._editing(): return
+        self.interaction.move_proposal(delta); self._refresh()
+
+    def _scroll_documents(self, delta: int) -> None:
+        if self._editing(): return
+        for widget in (self.design, self.workplan):
+            bar = widget.verticalScrollBar()
+            bar.setValue(bar.value() + delta * max(1, bar.pageStep()))
+
+    def _show_help(self) -> None:
+        box = self.QtWidgets.QMessageBox(self.window)
+        box.setWindowTitle("Agent Workflow keyboard and accessibility help")
+        box.setAccessibleName("Keyboard and accessibility help")
+        box.setText(help_text(gui=True))
+        box.setInformativeText("Focus order is decisions, proposals, documents, helper, then actions. All action buttons are keyboard reachable; editor fields retain typed characters.")
+        box.setStandardButtons(self.QtWidgets.QMessageBox.StandardButton.Close)
+        box.exec()
 
     def _select_point(self, index: int) -> None:
         if index >= 0:
@@ -135,17 +183,10 @@ class DecisionWindow:
         self.interaction.switch_document(); self._refresh()
 
     def _save(self) -> None:
-        result = self.persistence.save()
-        if result is not None and hasattr(result, "accepted") and not result.accepted:
-            self.status.setText(f"Save rejected: {result.reason}")
-            return
-        self._refresh()
+        self.persistence.save(); self._refresh()
 
     def _save_exit(self) -> None:
-        result = self.persistence.save(exit=True)
-        if result is not None and hasattr(result, "accepted") and not result.accepted:
-            self.status.setText(f"Save rejected: {result.reason}")
-            return
+        self.persistence.save(exit=True)
         if self.on_event is not None:
             self.on_event({"event_type": "safe-exit", "point_id": self.interaction.point.point_id})
         self.window.close()
@@ -246,12 +287,12 @@ class DecisionWindow:
         return self.app.exec()
 
 
-def build_gui_application(*, design_document: str = "# Design\n\nAwaiting AR context", workplan: str = "# Work plan\n\nAwaiting AR context", decisions: list[dict[str, Any]] | None = None, on_event=None, transport=None) -> DecisionWindow:
+def build_gui_application(*, design_document: str = "# Design\n\nAwaiting AR context", workplan: str = "# Work plan\n\nAwaiting AR context", decisions: list[dict[str, Any]] | None = None, on_event=None) -> DecisionWindow:
     packet = _packet_from_decisions(decisions, design_document, workplan) if decisions else _default_packet("design", "Review the design")
     interaction = LiveInteraction(packet)
     # Keep source Markdown in the shared view-model for both renderers.
     interaction.packet_document = lambda mode: design_document if mode == "design" else workplan  # type: ignore[attr-defined]
-    return DecisionWindow(interaction, on_event=on_event, transport=transport)
+    return DecisionWindow(interaction, on_event=on_event)
 
 
 def main() -> int:
