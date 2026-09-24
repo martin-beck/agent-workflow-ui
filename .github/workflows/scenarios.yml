@@ -83,6 +83,5 @@ jobs:
       - name: Fail on stale generated artifacts
         run: |
           git diff --check
-          git diff --stat -- artifacts docs/SCENARIOS.md docs/recordings docs/screenshots docs/gui-screenshots
           git diff --exit-code -- artifacts docs/SCENARIOS.md docs/recordings docs/screenshots docs/gui-screenshots
           test -z "$(git ls-files --others --exclude-standard -- artifacts docs/SCENARIOS.md docs/recordings docs/screenshots docs/gui-screenshots | grep -v '^artifacts/gui-screenshots/' || true)"
