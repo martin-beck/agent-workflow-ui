@@ -106,6 +106,12 @@ def issue_for_batch(
         raise TokenError("decision batch task_revision must be a positive integer")
     if not isinstance(packet_digest, str) or not packet_digest.startswith("sha256:"):
         raise TokenError("decision batch packet_digest must be canonical")
+    for name, value in (("project_id", project_id), ("session_id", session_id),
+                        ("packet_digest", packet_digest), ("session_file", session_file),
+                        ("event_file", event_file), ("ssh_host", ssh_host)):
+        _validate_text(name, value)
+    if not isinstance(ttl_seconds, int) or isinstance(ttl_seconds, bool) or not 1 <= ttl_seconds <= 86400:
+        raise TokenError("ttl_seconds must be between 1 and 86400")
     return TokenStore(store_path).issue(
         project_id=project_id,
         session_id=session_id,
@@ -117,6 +123,82 @@ def issue_for_batch(
         ttl_seconds=ttl_seconds,
         now=now,
     )
+
+
+def publish_batch(
+    store_path: str | Path,
+    request_path: str | Path,
+    request: dict[str, Any],
+    *,
+    session_file: str,
+    event_file: str,
+    ssh_host: str,
+    ttl_seconds: int = 900,
+    now: datetime | None = None,
+) -> str:
+    """Publish an authoritative request and its token as one recoverable unit.
+
+    JSON files cannot be replaced atomically as a pair.  The private journal
+    therefore acts as a write-ahead transaction: it contains the complete
+    request and registry projection, and is replayed before any subsequent
+    read if the authority process stops between the two replacements.  The
+    caller must print/use the returned token only after this function returns.
+    """
+    if not isinstance(request, dict):
+        raise TokenError("decision batch must be an object")
+    project_id = request.get("project_id")
+    session_id = request.get("session_id")
+    ar = request.get("ar") if isinstance(request.get("ar"), dict) else {}
+    task_revision = ar.get("task_revision", request.get("task_revision"))
+    packet_digest = request.get("packet_digest")
+    decisions = request.get("decisions", request.get("batch"))
+    if decisions is None and request.get("guidance_request") is not None:
+        decisions = [request["guidance_request"]]
+    if not isinstance(decisions, list) or not decisions:
+        raise TokenError("decision batch must contain at least one decision")
+    if not isinstance(task_revision, int) or isinstance(task_revision, bool) or task_revision < 1:
+        raise TokenError("decision batch task_revision must be a positive integer")
+    if not isinstance(packet_digest, str) or not packet_digest.startswith("sha256:"):
+        raise TokenError("decision batch packet_digest must be canonical")
+    for name, value in (("project_id", project_id), ("session_id", session_id),
+                        ("packet_digest", packet_digest), ("session_file", session_file),
+                        ("event_file", event_file), ("ssh_host", ssh_host)):
+        _validate_text(name, value)
+    if not isinstance(ttl_seconds, int) or isinstance(ttl_seconds, bool) or not 1 <= ttl_seconds <= 86400:
+        raise TokenError("ttl_seconds must be between 1 and 86400")
+    target = Path(request_path)
+    store = TokenStore(store_path)
+    if not target.is_absolute() or not store.path.is_absolute():
+        raise TokenError("authoritative publication paths must be absolute")
+    with store._exclusive():
+        store._recover_publication()
+        values = store._read_unrecovered()
+        current = _utc(now)
+        for _ in range(10):
+            token = "".join(secrets.choice(_ALPHABET) for _ in range(TOKEN_LENGTH))
+            if not any(hmac.compare_digest(item.get("token_digest", ""), _digest(token)) for item in values):
+                break
+        else:
+            raise TokenError("could not allocate unique batch token")
+        record = BatchToken(project_id, session_id, task_revision, packet_digest,
+                            session_file, event_file, ssh_host, _stamp(current),
+                            _stamp(current + timedelta(seconds=ttl_seconds)),
+                            _digest(token)).as_dict()
+        registry = {"schema_version": TOKEN_SCHEMA_VERSION, "tokens": [*values, record]}
+        journal = store.path.with_name(f".{store.path.name}.publication.json")
+        payload = {"schema_version": 1, "request_path": str(target),
+                   "registry_path": str(store.path), "request": request,
+                   "registry": registry}
+        _write_private_json(journal, payload)
+        try:
+            _write_private_json(target, request)
+            _write_private_json(store.path, registry)
+            journal.unlink(missing_ok=True)
+        except Exception as exc:
+            # Keep the journal for the next authority operation to replay;
+            # never let a possibly partial publication become a user command.
+            raise TokenError("authoritative batch publication failed") from exc
+        return token
 
 
 class TokenStore:
@@ -277,12 +359,31 @@ class TokenStore:
             handle.close()
 
     def _read(self) -> list[dict[str, Any]]:
+        self._recover_publication()
+        return self._read_unrecovered()
+
+    def _read_unrecovered(self) -> list[dict[str, Any]]:
         if not self.path.exists():
             return []
         value = json.loads(self.path.read_text(encoding="utf-8"))
         if value.get("schema_version") != TOKEN_SCHEMA_VERSION or not isinstance(value.get("tokens"), list):
             raise TokenError("invalid batch-token registry")
         return value["tokens"]
+
+    def _recover_publication(self) -> None:
+        journal = self.path.with_name(f".{self.path.name}.publication.json")
+        if not journal.exists():
+            return
+        try:
+            value = json.loads(journal.read_text(encoding="utf-8"))
+            if value.get("schema_version") != 1 or value.get("registry_path") != str(self.path):
+                raise TokenError("invalid authoritative publication journal")
+            request_path = Path(value["request_path"])
+            _write_private_json(request_path, value["request"])
+            _write_private_json(self.path, value["registry"])
+            journal.unlink(missing_ok=True)
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            raise TokenError("authoritative publication recovery failed") from exc
 
     def _write(self, values: list[dict[str, Any]]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -298,6 +399,27 @@ class TokenStore:
         finally:
             if os.path.exists(temporary_name):
                 os.unlink(temporary_name)
+
+
+def _write_private_json(path: Path, value: dict[str, Any]) -> None:
+    """Atomically write a private authority artifact and fsync its contents."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(path.parent, 0o700)
+    except OSError:
+        pass
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(value, handle, sort_keys=True, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, path)
+    finally:
+        if os.path.exists(temporary_name):
+            os.unlink(temporary_name)
 
 
 def resolve_batch_token(store_path: str | Path, token: str, *, ssh_host: str | None = None, now: datetime | None = None) -> BatchToken:
