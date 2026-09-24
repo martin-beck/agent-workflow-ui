@@ -48,7 +48,7 @@ def test_gui_audit_view_and_redacted_export(monkeypatch):
                                 "packet_digest": "sha256:" + "c" * 64, "session_id": "gui-audit"})
     window = build_gui_application(audit=audit)
     window._show_audit()
-    assert window.audit_view.isVisible()
+    assert window.audit_visible is True
     assert "AR-0102" in window.audit_view.toPlainText()
     assert window.export_audit()["redacted"] is True
     with pytest.raises(ValueError):

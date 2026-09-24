@@ -35,6 +35,7 @@ class DecisionWindow:
         self._allow_close = False
         self.on_event = on_event
         self.audit = audit or getattr(interaction, "audit", None)
+        self.audit_visible = False
         self.persistence = DurableSessionPersistence(interaction, on_event=on_event)
         self.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
         self.window = QtWidgets.QMainWindow()
@@ -160,7 +161,8 @@ class DecisionWindow:
             self.audit_view.setPlainText(self.audit.render() +
                                          "\n\nDry run: operations are validated against this revision before submission.\n"
                                          "Export: use the privacy-safe redacted export API; unredacted export is disabled.")
-        self.audit_view.setVisible(not self.audit_view.isVisible())
+        self.audit_visible = not self.audit_visible
+        self.audit_view.setVisible(self.audit_visible)
         if self.on_event is not None:
             self.on_event({"event_type": "audit-view"})
 
