@@ -30,3 +30,18 @@ The tag target, package version, compatibility report, scenario provenance,
 and hosted qualification checks must all refer to the same source revision.
 The release is not a claim of support for unqualified architectures,
 unavailable external hosts, or arbitrary SSH/display environments.
+
+## Scale and rollback qualification
+
+The integrated release gate also runs the public-safe AR-0104 scale fixture:
+
+```text
+python3 tools/awui-benchmark --output artifacts/release-scale-benchmark.json
+```
+
+It must pass the published budgets in
+[`PERFORMANCE_RELEASE.md`](PERFORMANCE_RELEASE.md) and the UX, navigation,
+audit, and resilience evidence gates. If an upgrade must be rolled back,
+restore the previous exact tag and its compatibility-lock commit, restore the
+prior session artifact, and rerun the release-contract and scale checks before
+resuming. A failed scale or evidence gate blocks publication.

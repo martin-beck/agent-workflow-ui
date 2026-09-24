@@ -414,7 +414,7 @@
       },
       {
         "path": "src/awtui/graph.py",
-        "sha256": "sha256:fbe062d0b8ce47d33957bd4dbc3fd5bbc51b85e0e006088158ee2d1568fd3cf5"
+        "sha256": "sha256:0871fda311dfae43b9b62ae78d0533c4f58a51ef7d5bc01cb511b447a1a0263c"
       },
       {
         "path": "src/awtui/gui.py",
@@ -439,6 +439,10 @@
       {
         "path": "src/awtui/markdown.py",
         "sha256": "sha256:b9d4fc41876f4b63c96eeda728fe92e0371157e9c9bcbfc2d2d4c1b48c2a7209"
+      },
+      {
+        "path": "src/awtui/performance.py",
+        "sha256": "sha256:5fdd5a9e54a558e90f4e85ac6a41f717923ec8c17b24204798bb10a155e931fc"
       },
       {
         "path": "src/awtui/persistence.py",
@@ -501,7 +505,7 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:7fabce3498c1a24fab45ca982a32c51afb607a27960e54723a5853c845b9680e"
+    "version": "sha256:ba82a9d59a94322b37a689cb49084da3979501a759aee32b9f6392eb3ad8d1fd"
   },
   "schema_version": 1,
   "source_release": {
