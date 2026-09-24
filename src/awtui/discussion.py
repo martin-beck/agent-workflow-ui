@@ -34,6 +34,13 @@ class PacketPoint:
     effective_until: str = ""
     rollback_of: str = ""
     conflict_reason: str = ""
+    # Batch workspace metadata.  These values are supplied by the Coordinator
+    # projection and are descriptive only; responses remain revision-bound.
+    ar_ref: str = ""
+    group: str = ""
+    depends_on: tuple[str, ...] = ()
+    evidence_refs: tuple[str, ...] = ()
+    blocked_reason: str = ""
 
     def __post_init__(self):
         if not self.point_id or not self.anchor or len(self.proposals) < 2:
@@ -56,12 +63,68 @@ class DiscussionPacket:
     def active(self, index: int = 0) -> PacketPoint:
         return self.points[max(0, min(index, len(self.points) - 1))]
 
+    def dependency_block(self, point: PacketPoint, responses: dict[str, "DecisionResponse"] | None = None) -> str:
+        """Return a stable explanation when a point cannot yet be selected."""
+        if point.blocked_reason:
+            return point.blocked_reason
+        responses = responses or {}
+        missing = [dependency for dependency in point.depends_on if dependency not in responses or responses[dependency].disposition != "select"]
+        return "waiting for: " + ", ".join(missing) if missing else ""
+
+    def status(self, point: PacketPoint, responses: dict[str, "DecisionResponse"] | None = None) -> str:
+        responses = responses or {}
+        if point.point_id in responses:
+            return getattr(responses[point.point_id], "disposition", "select")
+        return "blocked" if self.dependency_block(point, responses) else "unresolved"
+
+    def ordered_points(self, responses: dict[str, "DecisionResponse"] | None = None) -> tuple[PacketPoint, ...]:
+        """Stable dependency-first order, retaining packet order for ties."""
+        pending = list(self.points)
+        result: list[PacketPoint] = []
+        known = {point.point_id for point in pending}
+        while pending:
+            ready = [point for point in pending if all(dep not in known or dep in {item.point_id for item in result} for dep in point.depends_on)]
+            if not ready:
+                # Preserve all identities even for malformed/cyclic input; the
+                # blocked explanation makes the problem actionable in the UI.
+                result.extend(pending)
+                break
+            result.extend(ready)
+            pending = [point for point in pending if point not in ready]
+        return tuple(result)
+
+    def filtered_points(self, responses: dict[str, "DecisionResponse"] | None = None, *, query: str = "", group: str = "", include_answered: bool = True) -> tuple[PacketPoint, ...]:
+        responses = responses or {}
+        query = query.casefold().strip()
+        return tuple(point for point in self.ordered_points(responses) if
+            (not group or point.group == group) and
+            (include_answered or point.point_id not in responses) and
+            (not query or query in " ".join((point.point_id, point.ar_ref, point.group, point.question, point.anchor)).casefold()))
+
+    def groups(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(point.group for point in self.points if point.group))
+
+    def summary(self, responses: dict[str, "DecisionResponse"] | None = None) -> dict[str, int]:
+        responses = responses or {}
+        counts = {key: 0 for key in ("total", "answered", "unresolved", "blocked", "clarify", "rejected")}
+        counts["total"] = len(self.points)
+        for point in self.points:
+            state = self.status(point, responses)
+            if state == "select": counts["answered"] += 1
+            elif state == "clarify": counts["clarify"] += 1
+            elif state == "reject": counts["rejected"] += 1
+            elif state == "blocked": counts["blocked"] += 1
+            else: counts["unresolved"] += 1
+        return counts
+
     def batch_status(self, responses: dict[str, "DecisionResponse"] | None = None) -> tuple[str, ...]:
         """Return stable per-point status lines for a batched live view."""
         responses = responses or {}
         lines = []
         for point in self.points:
-            state = 'answered' if point.point_id in responses else 'unresolved'
+            state = self.status(point, responses)
+            if state == "select":
+                state = "answered"
             if point.rollback_of:
                 state += f" | rollback of {point.rollback_of}"
             if point.conflict_reason:
@@ -75,7 +138,8 @@ class DiscussionPacket:
 
 def render_batch(packet: DiscussionPacket, responses: dict[str, "DecisionResponse"] | None = None, *, coupling_warning: str = "") -> str:
     """Render an identity-preserving batch, including partial progress and coupling warnings."""
-    lines = [f"AR {packet.ar_id} revision {packet.task_revision} | batch {len(packet.points)} points"]
+    summary = packet.summary(responses)
+    lines = [f"AR {packet.ar_id} revision {packet.task_revision} | batch {len(packet.points)} points | progress {summary['answered']}/{summary['total']} answered"]
     if coupling_warning:
         lines.append(f"COUPLING WARNING: {coupling_warning}")
     lines.extend(packet.batch_status(responses))

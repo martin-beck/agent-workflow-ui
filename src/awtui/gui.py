@@ -76,6 +76,11 @@ class DecisionWindow:
         split.addWidget(docs)
         right = QtWidgets.QWidget(); right_layout = QtWidgets.QVBoxLayout(right)
         self.status = QtWidgets.QLabel(); self.status.setAccessibleName("Decision session status"); self.status.setToolTip("Shows saved state and how many decisions in this batch are selected."); right_layout.addWidget(self.status)
+        filters = QtWidgets.QHBoxLayout()
+        self.filter = QtWidgets.QLineEdit(); self.filter.setPlaceholderText("Filter AR, group, anchor, or question"); self.filter.setAccessibleName("Decision filter"); self.filter.setToolTip("Narrow this batch without changing authoritative order."); self.filter.textChanged.connect(self._filter_changed); filters.addWidget(self.filter)
+        self.group_filter = QtWidgets.QComboBox(); self.group_filter.setAccessibleName("Decision group filter"); self.group_filter.setToolTip("Show one decision group while retaining batch identity."); self.group_filter.addItem("All groups", ""); [self.group_filter.addItem(group, group) for group in self.interaction.packet.groups()]; self.group_filter.currentIndexChanged.connect(self._filter_changed); filters.addWidget(self.group_filter)
+        self.unresolved_only = QtWidgets.QCheckBox("Unresolved only"); self.unresolved_only.setAccessibleName("Unresolved decisions only"); self.unresolved_only.stateChanged.connect(self._filter_changed); filters.addWidget(self.unresolved_only)
+        right_layout.addLayout(filters)
         points_title = QtWidgets.QLabel("DECISIONS IN THIS BATCH"); points_title.setObjectName("sectionTitle"); right_layout.addWidget(points_title)
         self.points = QtWidgets.QListWidget(); self.points.setAccessibleName("Batch decisions"); self.points.setToolTip("Select a decision to see its proposals and corresponding document highlights."); self.points.currentRowChanged.connect(self._select_point); right_layout.addWidget(self.points, 2)
         proposals_title = QtWidgets.QLabel("PROPOSED SOLUTIONS"); proposals_title.setObjectName("sectionTitle"); right_layout.addWidget(proposals_title)
@@ -145,7 +150,9 @@ class DecisionWindow:
 
     def _select_point(self, index: int) -> None:
         if index >= 0:
-            self.interaction.point_index = index
+            visible = self.interaction.visible_points()
+            if index >= len(visible): return
+            self.interaction.point_index = next(i for i, point in enumerate(self.interaction.packet.points) if point.point_id == visible[index].point_id)
             self.interaction.proposal_index = 0
             self._refresh()
 
@@ -155,7 +162,11 @@ class DecisionWindow:
             self._refresh_helper()
 
     def _respond(self, disposition: str) -> None:
-        self.interaction.respond(disposition)
+        try:
+            self.interaction.respond(disposition)
+        except ValueError as error:
+            self.helper.setPlainText(str(error) + "\n\nReview the prerequisite decision or inspect its evidence references.")
+            return
         if self.on_event is not None:
             self.on_event({"event_type": disposition, "point_id": self.interaction.point.point_id,
                            "disposition": disposition,
@@ -167,10 +178,14 @@ class DecisionWindow:
 
     def _request_evidence(self) -> None:
         self.interaction.saved = False
-        self.helper.setPlainText("More evidence requested for this decision. The Coordinator will keep it unresolved until evidence is supplied.")
+        self.helper.setPlainText("More evidence requested for this decision. The Coordinator will keep it unresolved until evidence is supplied.\n\nEvidence refs: " + (", ".join(self.interaction.point.evidence_refs) or "none recorded"))
         if self.on_event is not None:
             self.on_event({"event_type": "request-more-evidence", "point_id": self.interaction.point.point_id,
                            "disposition": "request-more-evidence"})
+
+    def _filter_changed(self) -> None:
+        self.interaction.set_filter(self.filter.text(), self.group_filter.currentData() or "", include_answered=not self.unresolved_only.isChecked())
+        self._refresh()
 
     def _reopen(self) -> None:
         self.interaction.responses.pop(self.interaction.point.point_id, None)
@@ -262,11 +277,13 @@ class DecisionWindow:
 
     def _refresh(self) -> None:
         self.points.blockSignals(True); self.points.clear()
-        for point in self.interaction.packet.points:
+        visible = self.interaction.visible_points()
+        for point in visible:
             response = self.interaction.responses.get(point.point_id)
             marker = "✓" if response and response.disposition == "select" else "•"
             self.points.addItem(f"{marker} {point.point_id}  {point.anchor}")
-        self.points.setCurrentRow(self.interaction.point_index); self.points.blockSignals(False)
+        current_row = next((row for row, point in enumerate(visible) if point.point_id == self.interaction.point.point_id), 0)
+        self.points.setCurrentRow(current_row); self.points.blockSignals(False)
         self.proposals.blockSignals(True); self.proposals.clear()
         point = self.interaction.point
         response = self.interaction.responses.get(point.point_id)
@@ -279,7 +296,8 @@ class DecisionWindow:
         self.workplan.setMarkdown(workplan_document)
         self._highlight_document(self.design, self.interaction.point.document_highlights.get("design", self.interaction.point.highlight or self.interaction.point.question))
         self._highlight_document(self.workplan, self.interaction.point.document_highlights.get("workplan", self.interaction.point.highlight or self.interaction.point.question))
-        self.status.setText(f"Decision {self.interaction.point_index + 1}/{len(self.interaction.packet.points)}  |  {'saved' if self.interaction.saved else 'unsaved'}  |  selected {sum(r.disposition == 'select' for r in self.interaction.responses.values())}/{len(self.interaction.packet.points)}")
+        summary = self.interaction.packet.summary(self.interaction.responses)
+        self.status.setText(f"Decision {self.interaction.point_index + 1}/{len(self.interaction.packet.points)}  |  {'saved' if self.interaction.saved else 'unsaved'}  |  answered {summary['answered']}/{summary['total']}  |  unresolved {summary['unresolved']}  |  blocked {summary['blocked']}")
         self._refresh_helper()
 
     def run(self) -> int:
