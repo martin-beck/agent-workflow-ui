@@ -1,5 +1,9 @@
 # Agent Workflow UI
 
+Release line: **v0.6.0** (dashboard, bounded hierarchy navigation, directive
+entry, paused-session resume, rollback/conflict display, and refreshed scenario
+artifacts).
+
 Agent Workflow UI is the interactive Linux desktop and terminal application
 for human-oracle discussion, decision selection, and post-discussion conflict
 reconciliation. `awui-live` selects the premium Qt desktop renderer whenever a

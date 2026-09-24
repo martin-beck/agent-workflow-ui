@@ -42,14 +42,14 @@ accepted by the installed launcher.
 On Linux and other POSIX systems, the equivalent no-admin one-time install is:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/v0.5.2/tools/awui-install.sh | sh -s -- \
+curl -fsSL https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/v0.6.0/tools/awui-install.sh | sh -s -- \
   --ssh-host ai-ws --remote-state-root /srv/data/projects/awc-malloc-state
 ```
 
 `wget` can be used when `curl` is unavailable:
 
 ```sh
-wget -qO- https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/v0.5.2/tools/awui-install.sh | sh -s -- \
+wget -qO- https://raw.githubusercontent.com/martin-beck/agent-workflow-ui/v0.6.0/tools/awui-install.sh | sh -s -- \
   --ssh-host ai-ws --remote-state-root /srv/data/projects/awc-malloc-state
 ```
 
