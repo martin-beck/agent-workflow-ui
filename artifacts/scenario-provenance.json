@@ -382,7 +382,7 @@
       },
       {
         "path": "src/awtui/bridge.py",
-        "sha256": "sha256:5932761a58437ed7b7724588d195399e036cc0da59f3cfddc84545ac193dac7c"
+        "sha256": "sha256:6d568fd52ff2f6c4fc4081ecb30919d0653300e605282cc496635314fc8c8285"
       },
       {
         "path": "src/awtui/connect.py",
@@ -406,7 +406,7 @@
       },
       {
         "path": "src/awtui/gui.py",
-        "sha256": "sha256:8fae27fc9e47e27393eef4b8d4567d3fb44cd3b1de1aea9053791ac45335ab3d"
+        "sha256": "sha256:59e6fef19140c0cb130b1dd6e4dedbbf3b87702aec14b247b5c150a542f41176"
       },
       {
         "path": "src/awtui/host.py",
@@ -422,11 +422,15 @@
       },
       {
         "path": "src/awtui/live.py",
-        "sha256": "sha256:3bc8d63fd16095ec50473562276f634be1fd95f359bc96892f60666a6fb09d5b"
+        "sha256": "sha256:49f320bb08f9fb206ce3849a2dd534cc3edfa14ce2f948d0546996a534837bce"
       },
       {
         "path": "src/awtui/markdown.py",
         "sha256": "sha256:b9d4fc41876f4b63c96eeda728fe92e0371157e9c9bcbfc2d2d4c1b48c2a7209"
+      },
+      {
+        "path": "src/awtui/persistence.py",
+        "sha256": "sha256:668878d8be58dca260c9028890808b13bbf336164ade87ae5969f6b6f07c965e"
       },
       {
         "path": "src/awtui/reconciliation.py",
@@ -481,7 +485,7 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:b9d660360c89ea1beea57ca0a761a3bdfd30d1c874e23f1e013ae13b6557d819"
+    "version": "sha256:11704bc4f0f07f963d1fff234a0e9ef6059315025da398e545e036324b87c6b5"
   },
   "schema_version": 1,
   "source_release": {
