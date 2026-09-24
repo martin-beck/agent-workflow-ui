@@ -449,6 +449,10 @@
         "sha256": "sha256:24af77c5ef096d496b35227d22d071db677bd90e1d33709f6cf36f8aed3c9266"
       },
       {
+        "path": "src/awtui/resilience.py",
+        "sha256": "sha256:1ffd6adffe98d099dd5fde7ddcf53ce4eeb4554991a64b93205aa14229da8c6f"
+      },
+      {
         "path": "src/awtui/scenario_helper.py",
         "sha256": "sha256:01f2be6f343512315daf0b38d91113a19957641dbed60767080a15a41e528a31"
       },
@@ -497,7 +501,7 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:fb18b1640b5e52ccd0a9401c5ddd90cca4606b5d39341a4568b122f56f682209"
+    "version": "sha256:7fabce3498c1a24fab45ca982a32c51afb607a27960e54723a5853c845b9680e"
   },
   "schema_version": 1,
   "source_release": {

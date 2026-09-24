@@ -37,6 +37,12 @@ jobs:
       - run: asciinema --version
       - run: python tools/validate_scenarios.py
       - run: python tools/run_scenarios.py
+      - name: Run deterministic resilience matrix
+        run: python tools/run_resilience_matrix.py --output-dir artifacts/resilience
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resilience-matrix
+          path: artifacts/resilience/resilience-matrix.json
       - run: python tools/run_gui_scenarios.py --output-dir artifacts/gui-screenshots
       - uses: actions/upload-artifact@v4
         with:
