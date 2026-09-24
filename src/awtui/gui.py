@@ -12,6 +12,7 @@ from typing import Any
 from .discussion import Proposal
 from .live import LiveInteraction, _default_packet, _packet_from_decisions
 from .actions import help_text
+from .persistence import DurableSessionPersistence
 
 
 def _qt():
@@ -31,6 +32,7 @@ class DecisionWindow:
         self.interaction = interaction
         self._allow_close = False
         self.on_event = on_event
+        self.persistence = DurableSessionPersistence(interaction, on_event=on_event)
         self.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
         self.window = QtWidgets.QMainWindow()
         self.window.setWindowTitle(title)
@@ -181,10 +183,10 @@ class DecisionWindow:
         self.interaction.switch_document(); self._refresh()
 
     def _save(self) -> None:
-        self.interaction.saved = True; self._refresh()
+        self.persistence.save(); self._refresh()
 
     def _save_exit(self) -> None:
-        self._save()
+        self.persistence.save(exit=True)
         if self.on_event is not None:
             self.on_event({"event_type": "safe-exit", "point_id": self.interaction.point.point_id})
         self.window.close()

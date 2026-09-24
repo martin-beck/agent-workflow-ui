@@ -410,7 +410,7 @@
       },
       {
         "path": "src/awtui/gui.py",
-        "sha256": "sha256:a9a320c28976f8dc842e79e168ec435196e57490402e2bddc5bb5b95b3cd0be2"
+        "sha256": "sha256:1d0e6cb5ab394524d994ff9369a20e4876f926d919604d35e8dd2eaa3ca8bde4"
       },
       {
         "path": "src/awtui/host.py",
@@ -489,7 +489,7 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:052962d9976578f4b10ecdba14cae51ff0caf2caebeb6942df22afe9a66edf83"
+    "version": "sha256:f50bfac6b7b3a26b331635224b8d2d27e39812a84b5ac35b3c6f2b26f8c52a7d"
   },
   "schema_version": 1,
   "source_release": {
