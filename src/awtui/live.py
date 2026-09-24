@@ -16,6 +16,8 @@ from prompt_toolkit.widgets import Frame, TextArea
 from .discussion import DiscussionPacket, DecisionResponse, PacketPoint, Proposal
 from .markdown import render_markdown
 from .transport import LiveSessionTransport, EventAcknowledgement
+from .dashboard import BoardRequest, render_dashboard
+from .journal import render_paused_cards, resume_event
 
 RECORDED_CONTROLS = {"\n": "select", "\r": "select", "r": "reject", "c": "clarify", "m": "request-more-evidence", "a": "add-proposal", "s": "safe-exit", "o": "reopen"}
 
@@ -71,7 +73,7 @@ def dispatch_recorded_input(keys: str, on_event) -> list[str]:
 
 class LiveInteraction:
     """Mutable view-model for point/proposal selection and batch responses."""
-    def __init__(self, packet: DiscussionPacket):
+    def __init__(self, packet: DiscussionPacket, *, paused_sessions: list[dict] | None = None):
         self.packet, self.point_index, self.proposal_index = packet, 0, 0
         self.document_mode = packet.document
         self.responses: dict[str, DecisionResponse] = {}
@@ -80,6 +82,8 @@ class LiveInteraction:
         self.exit_confirm = False
         self.exit_confirm_index = 0
         self.editing_proposal_index: int | None = None
+        self.paused_sessions = list(paused_sessions or [])
+        self.paused_session_index = 0
     @property
     def point(self): return self.packet.points[self.point_index]
     @property
@@ -155,7 +159,13 @@ class LiveInteraction:
         p = self.proposal
         response = self.responses.get(self.point.point_id)
         prefix = "Clarification requested: this decision is not answered.\n\n" if response and response.disposition == "clarify" else ""
-        return prefix + f"Proposal {self.proposal_index + 1}/{len(self.point.proposals)}: {p.label}\n\nRationale: {p.rationale}\nConfidence: {p.confidence:.2f}\nTrade-offs: {p.tradeoffs}\n\nAnchor: {self.point.anchor}\nHighlight: {self.active_highlight()}\nImplications: {self.point.implications}\nEvidence gap: {self.point.evidence_gap or 'none recorded'}\nHuman intent is separate from implementation and quality evidence."
+        cards = render_paused_cards(self.paused_sessions, selected=self.paused_session_index) if self.paused_sessions else ""
+        return (cards + ("\n\n" if cards else "") + prefix + f"Proposal {self.proposal_index + 1}/{len(self.point.proposals)}: {p.label}\n\nRationale: {p.rationale}\nConfidence: {p.confidence:.2f}\nTrade-offs: {p.tradeoffs}\n\nAnchor: {self.point.anchor}\nHighlight: {self.active_highlight()}\nImplications: {self.point.implications}\nEvidence gap: {self.point.evidence_gap or 'none recorded'}\nHuman intent is separate from implementation and quality evidence.")
+
+    def resume_selected_session(self) -> dict:
+        if not self.paused_sessions:
+            raise ValueError("no paused sessions available")
+        return resume_event(self.paused_sessions[self.paused_session_index])
 
     def exit_requirements(self) -> list[str]:
         missing = [point.point_id for point in self.packet.points if self.responses.get(point.point_id, None) is None or self.responses[point.point_id].disposition != "select"]
@@ -234,10 +244,11 @@ def run_application(application, *, output_fn=print) -> int:
         return 1
 
 
-def build_application(*, document: str = "Awaiting AR context", points: str = "No discussion points", helper: str = "Select a point for implications and evidence", on_event=None, packet: DiscussionPacket | None = None, workplan: str = "Awaiting workplan", design_document: str | None = None, decisions=None, transport: LiveSessionTransport | None = None) -> Application:
+def build_application(*, document: str = "Awaiting AR context", points: str = "No discussion points", helper: str = "Select a point for implications and evidence", on_event=None, packet: DiscussionPacket | None = None, workplan: str = "Awaiting workplan", design_document: str | None = None, decisions=None, transport: LiveSessionTransport | None = None, paused_sessions: list[dict] | None = None, board_request: dict | BoardRequest | None = None) -> Application:
     design_document = design_document if design_document is not None else document
     packet = packet or (_packet_from_decisions(decisions, design_document, workplan) if decisions else None)
-    interaction = LiveInteraction(packet or _default_packet(design_document, points))
+    interaction = LiveInteraction(packet or _default_packet(design_document, points), paused_sessions=paused_sessions)
+    board = board_request if isinstance(board_request, BoardRequest) else (BoardRequest.from_dict(board_request) if board_request is not None else None)
     interaction.proposal_edit_index = 0
     interaction.proposal_confirm = False
     document_view = TextArea(
@@ -265,7 +276,8 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
         confirmation_view,
         filter=Condition(lambda: interaction.input_mode and interaction.proposal_confirm),
     )
-    footer = TextArea(text="↑/↓: decision  ←/→: proposal  tab/w/d: workplan/design  page-up/page-down: scroll document  enter: select  r: reject  c: clarify  m: evidence  a: add  e: edit own  s: save  o: reopen  q: quit", read_only=True, height=1, style="class:footer")
+    dashboard_view = TextArea(text=render_dashboard(board) if board else "Company dashboard\nNo rollup supplied.", read_only=True, scrollbar=True)
+    footer = TextArea(text="↑/↓: decision  ←/→: proposal  tab/w/d: workplan/design  b: dashboard  page-up/page-down: scroll document  enter: select  r: reject  c: clarify  m: evidence  a: add  e: edit own  s: save  o: reopen  q: quit", read_only=True, height=1, style="class:footer")
     bindings = KeyBindings()
     def refresh():
         for field in editor_fields:
@@ -475,6 +487,12 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     def design_key(event):
         if interaction.input_mode: event.app.current_buffer.insert_text("d")
         else: interaction.document_mode = "design"; interaction._manual_document_switch = True; refresh()
+    @bindings.add("b")
+    def dashboard_key(event):
+        if not interaction.input_mode and board is not None:
+            event.app.layout.focus(dashboard_view)
+            if on_event is not None:
+                on_event("dashboard")
     @bindings.add("enter")
     def enter(event):
         if interaction.exit_confirm:
@@ -524,6 +542,22 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
                 event.app.current_buffer.insert_text(key)
                 return
             emit(event, event_type)
+    @bindings.add("R")
+    def resume_paused(event):
+        if not interaction.paused_sessions:
+            helper_view.text = "No paused sessions are available to resume."
+            return
+        record = interaction.resume_selected_session()
+        if transport is not None:
+            acknowledgement = transport.submit("resume", **record.get("payload", {}), paused_session_id=record["session_id"])
+            application.awtui_last_acknowledgement = acknowledgement
+            if not acknowledgement.accepted:
+                helper_view.text = f"Resume not accepted: {acknowledgement.reason}"
+                return
+        if on_event is not None:
+            on_event(record)
+        helper_view.text = "Resume requested through the host transport."
+        refresh()
     @bindings.add("a")
     def add(event):
         if event.app is None:
@@ -571,6 +605,7 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     document_frame = Frame(document_view, title="Design / Workplan", width=pane_width, style="class:document-pane")
     points_frame = Frame(points_view, title="Decisions and proposals", width=pane_width, style="class:decision-pane")
     helper_frame = Frame(helper_view, title="Helper: rationale, implications, evidence", style="class:helper-pane", width=Dimension(weight=1), height=helper_height)
+    dashboard_frame = Frame(dashboard_view, title="Company dashboard", style="class:dashboard-pane", width=Dimension(weight=1), height=Dimension(min=4, max=12, preferred=6))
     horizontal_documents = VSplit([document_frame, points_frame], padding=0, width=Dimension(weight=1), height=actual_document_row_height)
     vertical_documents = HSplit(
         [
@@ -587,7 +622,7 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     responsive_documents.height = document_row_height
     responsive_documents.children = horizontal_documents.children
     body = HSplit(
-        [responsive_documents, helper_frame, editor_form, confirmation, footer],
+        [responsive_documents, helper_frame, dashboard_frame, editor_form, confirmation, footer],
         width=Dimension(weight=1),
         height=Dimension(weight=1),
     )
@@ -600,12 +635,15 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
             "document-pane.frame.border": "ansigreen",
             "decision-pane.frame.border": "ansiyellow",
             "helper-pane.frame.border": "ansimagenta",
+            "dashboard-pane.frame.border": "ansicyan",
             "footer": "bg:#202530 #d7f9ff",
         }),
     )
     interaction._refresh = refresh
     refresh()
     application.awtui_panes = (document_view, points_view, helper_view)
+    application.awtui_dashboard = dashboard_view
+    application.awtui_board_request = board
     application.awtui_footer = footer
     application.awtui_layout_dimensions = {
         "document_row": document_row_height,
@@ -630,6 +668,8 @@ def build_application_from_context(context: dict, *, decisions=None, on_event=No
         decisions=decisions,
         on_event=on_event,
         transport=transport,
+        paused_sessions=context.get("paused_sessions", []),
+        board_request=context.get("board"),
     )
     application.interaction.request_id = context.get("request_id")
     application.interaction.candidate_ids = {
@@ -646,6 +686,9 @@ def build_application_from_awg_request(request: dict, *, project_id: str, sessio
         context, decisions = envelope_requests_to_tui(request, project_id=project_id, session_id=session_id, documents=documents or request.get("documents"))
     else:
         context, decisions = request_to_tui(request, project_id=project_id, session_id=session_id, documents=documents)
+    context["paused_sessions"] = request.get("paused_sessions", [])
+    if isinstance(request.get("board"), dict):
+        context["board"] = request["board"]
     application = build_application_from_context(context, decisions=decisions, on_event=on_event, record_event=record_event)
     application.interaction.point_request_ids = {item["point_id"]: item.get("request_id", context.get("request_id")) for item in decisions}
     return application
