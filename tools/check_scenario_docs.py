@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
+sys.path.insert(0, str(ROOT))
+from tools.scenario_provenance import check as check_provenance
 SCREENSHOT_LINK = re.compile(r"^- \*\*Screenshot:\*\* \[open terminal capture\]\(([^)]+)\)$", re.MULTILINE)
 RECORDING_LINK = re.compile(r"^- \*\*Live recording:\*\* \[play asciinema recording\]\(([^)]+)\)$", re.MULTILINE)
 GUI_LINK = re.compile(r"^- \*\*GUI capture:\*\* \[open GUI screenshot\]\(([^)]+)\)$", re.MULTILINE)
@@ -73,6 +75,7 @@ def check(root: Path = ROOT) -> list[str]:
         errors.append("scenario-results IDs do not match corpus")
     if "../docs/" in docs or "file://" in docs:
         errors.append("SCENARIOS.md contains an invalid or non-portable link")
+    errors.extend(check_provenance(root))
     return errors
 
 
