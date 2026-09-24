@@ -99,7 +99,6 @@ class DecisionWindow:
     def _install_shortcuts(self) -> None:
         """Install the shared action map without stealing typed editor input."""
         QtGui = self.QtGui
-        QtWidgets = self.QtWidgets
         self._shortcuts = []
         bindings = {
             "?": self._show_help,
@@ -112,7 +111,7 @@ class DecisionWindow:
         }
         for sequence, callback in bindings.items():
             shortcut = QtGui.QShortcut(QtGui.QKeySequence(sequence), self.window)
-            shortcut.setContext(QtCore.Qt.ShortcutContext.WindowShortcut)
+            shortcut.setContext(self.QtCore.Qt.ShortcutContext.WindowShortcut)
             shortcut.activated.connect(callback)
             self._shortcuts.append(shortcut)
 
