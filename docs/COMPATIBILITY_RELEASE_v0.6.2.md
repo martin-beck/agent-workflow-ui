@@ -1,6 +1,6 @@
-# Agent Workflow UI v0.6.1 compatibility release
+# Agent Workflow UI v0.6.2 compatibility release
 
-This document is the operator-facing qualification record for the `v0.6.1`
+This document is the operator-facing qualification record for the `v0.6.2`
 release. The release is selected by an immutable tag and commit; consumers
 must verify both before installing it. The Agent Workflow umbrella records the
 same tag and commit in its compatibility lock.
@@ -21,7 +21,7 @@ verify the exact tag target:
 
 ```text
 git fetch --tags https://github.com/martin-beck/agent-workflow-ui.git
-git rev-parse v0.6.1^{commit}
+git rev-parse v0.6.2^{commit}
 git rev-parse HEAD
 python3 -m pytest -q tests/test_release_contract.py tests/test_windows_qualification.py
 ```

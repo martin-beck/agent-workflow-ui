@@ -178,7 +178,7 @@ def release_gates() -> dict[str, bool]:
         "navigation": (root / "docs/document-anchors.md").is_file(),
         "audit": (root / "docs/AUDIT_PRIVACY.md").is_file(),
         "resilience": (root / "docs/RESILIENCE.md").is_file(),
-        "compatibility": (root / "docs/COMPATIBILITY_RELEASE_v0.6.1.md").is_file(),
+        "compatibility": (root / "docs/COMPATIBILITY_RELEASE_v0.6.2.md").is_file(),
     }
     return required
 
