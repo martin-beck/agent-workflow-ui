@@ -8,6 +8,8 @@ def detect_ui_backend(*, environ: dict[str, str] | None = None) -> str:
     env = os.environ if environ is None else environ
     if env.get("AWUI_BACKEND") in {"gui", "tui"}:
         return env["AWUI_BACKEND"]
+    if env.get("OS") == "Windows_NT" or env.get("AWUI_CLIENT_PLATFORM", "").lower() == "windows":
+        return "tui" if env.get("AWUI_GUI_AVAILABLE", "").lower() in {"0", "false", "no", "off"} else "gui"
     if env.get("DISPLAY") or env.get("WAYLAND_DISPLAY"):
         return "gui"
     return "tui"

@@ -9,7 +9,13 @@ disposition. The helper never prints packet contents or credentials.
 The Linux scenario workflow starts an isolated, temporary `sshd` account and
 runs this helper against loopback. The Windows compatibility workflow runs the
 same fixture with a fake transport plus the PowerShell command/capability tests;
-Windows CI does not assume that an SSH daemon is available.
+Windows CI does not assume that an SSH daemon is available. The Windows job
+also runs `tools/qualify_windows.py` for `amd64` and `arm64` architecture
+contract rows. It records only redacted facts: observed and expected
+architecture, GUI/TUI selection, preservation of the OpenSSH alias,
+batch/journal return, single-use-token status, and temporary cleanup. The
+ARM64 row is portable contract coverage on hosted CI; native ARM64
+qualification uses the same command on an ARM64 self-hosted runner.
 
 For a manually prepared endpoint:
 
