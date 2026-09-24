@@ -3,7 +3,29 @@ from __future__ import annotations
 
 from typing import Any
 
+from .dashboard import BoardRequest, RollupPage
+
 BRIDGE_VERSION = "1.0"
+
+
+def board_request(*, project_id: str, ar_id: str, task_revision: int,
+                  packet_digest: str, rollup_revision: int,
+                  pages: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build the revision-bound company dashboard request envelope."""
+    return BoardRequest(project_id, ar_id, task_revision, packet_digest,
+                        rollup_revision,
+                        tuple(RollupPage.from_dict(page) for page in pages)).as_dict()
+
+
+def board_response(request: dict[str, Any], *, page_id: str) -> dict[str, Any]:
+    """Build a navigation response bound to the exact rollup snapshot."""
+    parsed = BoardRequest.from_dict(request)
+    if page_id not in {page.page_id for page in parsed.pages}:
+        raise ValueError("board response selects an unknown page")
+    return {"schema_version": BRIDGE_VERSION, "kind": "coordinator-board-response",
+            "project_id": parsed.project_id, "ar_id": parsed.ar_id,
+            "task_revision": parsed.task_revision, "packet_digest": parsed.packet_digest,
+            "rollup_revision": parsed.rollup_revision, "page_id": page_id}
 
 
 def interaction_state(*, request_id: str, decision_class: str, status: str = "pending", deadline: str | None = None) -> dict[str, Any]:
