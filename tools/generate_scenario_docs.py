@@ -24,7 +24,7 @@ def generate(root: Path = ROOT) -> str:
         raise ValueError(f"scenario results do not match corpus (missing={missing}, extra={extra})")
     if results.get("scenario_count") != len(scenario_ids):
         raise ValueError("scenario result count does not match corpus")
-    lines = ["# Agent Workflow UI scenario workflows", "", "These workflows are generated from `scenarios/corpus.json` and replayed through the actual prompt-toolkit TUI and Qt GUI. Each case has a terminal SVG pane snapshot, a GUI screenshot, an asciinema v2 terminal animation, and an explicit event trace.", "", "Play a recording locally with `asciinema play docs/recordings/<scenario-id>.cast`.", "", f"**Generated scenarios:** {len(corpus['scenarios'])}", ""]
+    lines = ["# Agent Workflow UI scenario workflows", "", "These workflows are generated from `scenarios/corpus.json` and replayed through the actual prompt-toolkit TUI and Qt GUI. Each case has a terminal SVG pane snapshot, a GUI screenshot, an asciinema v2 terminal animation, and an explicit event trace.", "", "Play a recording locally with `asciinema play docs/recordings/<scenario-id>.cast`.", "", "Freshness and public provenance are recorded in [`artifacts/scenario-provenance.json`](../artifacts/scenario-provenance.json).", "", f"**Generated scenarios:** {len(corpus['scenarios'])}", ""]
     for scenario in corpus["scenarios"]:
         result = by_id[scenario["id"]]
         screenshot = Path(result["screenshot"])

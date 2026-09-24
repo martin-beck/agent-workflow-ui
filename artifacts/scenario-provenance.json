@@ -1,0 +1,491 @@
+{
+  "artifacts": [
+    {
+      "path": "docs/SCENARIOS.md",
+      "sha256": "sha256:dda55da6d24e633b6645dcb536a781a48fdbd42c8164240cbddd8f392f6512b6"
+    },
+    {
+      "path": "docs/gui-screenshots/add-alternative.png",
+      "sha256": "sha256:b9fc4047c8c010e9eb0f278b39e331cea1e692fe3b1365f14c264f8d5a9a3c3c"
+    },
+    {
+      "path": "docs/gui-screenshots/alternative-clarify.png",
+      "sha256": "sha256:8f0b6a0d5202387215724bb2d8067235fa0b27161f5eec1602833468c79986b1"
+    },
+    {
+      "path": "docs/gui-screenshots/basic-select.png",
+      "sha256": "sha256:3af2b92896885264e012d62ebe257502c13e9230bdc05340fae78a9395b141a0"
+    },
+    {
+      "path": "docs/gui-screenshots/batch-clarify.png",
+      "sha256": "sha256:f59888b624ddb58dd144385e326ee96273a61198b79f7eba833ba04cb7928f66"
+    },
+    {
+      "path": "docs/gui-screenshots/batch-partial.png",
+      "sha256": "sha256:c182d098d6b03408189161a24e98067f8a494758912b6f0cdd03b2452d55a01b"
+    },
+    {
+      "path": "docs/gui-screenshots/board-directive-entry.png",
+      "sha256": "sha256:b3a7837974dde282c338c2ceccef2d5bbfecc1602c8868f938daa92c00101b1f"
+    },
+    {
+      "path": "docs/gui-screenshots/cancel-after-review.png",
+      "sha256": "sha256:0325b3b4ef63921a22011fff264e14be672fddc7ae1e1691ba6695a3af6ee3fe"
+    },
+    {
+      "path": "docs/gui-screenshots/clarify-ownership.png",
+      "sha256": "sha256:cdd1b5939e81d18ddb05e7b2921aceba074b3d5da4cf0582d4bbfa83fe65abb4"
+    },
+    {
+      "path": "docs/gui-screenshots/company-dashboard.png",
+      "sha256": "sha256:cbbed6e2fa625fb404b2146eb4d3795692a57fd1c56a2fd95805b9eb349b4df9"
+    },
+    {
+      "path": "docs/gui-screenshots/escape-exit.png",
+      "sha256": "sha256:825ab6c84ff9d25d5ef0f2c10521894634231c8ef0c9c8189a6dd061423ad2fe"
+    },
+    {
+      "path": "docs/gui-screenshots/evidence-then-reject.png",
+      "sha256": "sha256:baf316ceebf55b3f67828fe34a3f3f0c815497794c246d55d90cf991367f88bb"
+    },
+    {
+      "path": "docs/gui-screenshots/explicit-document-views.png",
+      "sha256": "sha256:fc80119fc746cf99c3725e6b8106e09d21d8b886e8e23418e6a352acb20cdbcb"
+    },
+    {
+      "path": "docs/gui-screenshots/full-contest.png",
+      "sha256": "sha256:eab0a9a6c24e55f8000876bdb83c66a05bad71ee2660ba7b9fc44359b58e5338"
+    },
+    {
+      "path": "docs/gui-screenshots/hierarchy-drill-down.png",
+      "sha256": "sha256:2405866d32876efbe4402df8dbfa445774882b5ecc1ca1b00354b77000a8681b"
+    },
+    {
+      "path": "docs/gui-screenshots/more-evidence.png",
+      "sha256": "sha256:e27d7960f07c0e6fbe95142fdbd4f5527852a77cb49a0c2fc338c223df727c5d"
+    },
+    {
+      "path": "docs/gui-screenshots/multi-point-handoff.png",
+      "sha256": "sha256:4bfcaa652648d0081a33751221a0a69d7f7957ec74a2f1736a3ec9e930600567"
+    },
+    {
+      "path": "docs/gui-screenshots/navigate-documents.png",
+      "sha256": "sha256:1cbf2401fa67e5150d9fc90e80144f966d07cfc9798bc505379004ad27132422"
+    },
+    {
+      "path": "docs/gui-screenshots/pause-resume-session.png",
+      "sha256": "sha256:e6f127210bb2c9cf6cec898feacfec97cc73ad60142a332e4a07862652743ebf"
+    },
+    {
+      "path": "docs/gui-screenshots/proposal-reject.png",
+      "sha256": "sha256:264da93d4e3f96cb34b7b34c0c59fe9d176c0c5819489d9636024b9ce2fb10e4"
+    },
+    {
+      "path": "docs/gui-screenshots/proposal-with-navigation.png",
+      "sha256": "sha256:891189ca2847a00841c1a2d18f02f0b707e46836f0a044bb94d83899556682d0"
+    },
+    {
+      "path": "docs/gui-screenshots/reask-after-gap.png",
+      "sha256": "sha256:2b7bdb62644a5e1546b217011c6256171218826a222d521ac312bae3c634fea3"
+    },
+    {
+      "path": "docs/gui-screenshots/reject-risk.png",
+      "sha256": "sha256:eb31fceffa7324d355a9bf9dba1f37d1e6a17f0efe2f5716307086d4fb7f98c8"
+    },
+    {
+      "path": "docs/gui-screenshots/reopen-save.png",
+      "sha256": "sha256:005dde3516f5e4703e24263f4ffed7a86276689fce1a052c60363bf32da57c17"
+    },
+    {
+      "path": "docs/gui-screenshots/revise-selection.png",
+      "sha256": "sha256:fe47f6bd04e08692c0d970e896049efd5c5da593482e4198e9dbe364aafe6b66"
+    },
+    {
+      "path": "docs/gui-screenshots/revision-reopen.png",
+      "sha256": "sha256:7becc59a221f69b1d265c81fc247b23ca5f3a1f1a034bbf7896af22aa93bfc9d"
+    },
+    {
+      "path": "docs/gui-screenshots/rollback-conflict-display.png",
+      "sha256": "sha256:ec8a2634f2fbccb3bc7922432919e90392066c987715501bd9c33c208c617a49"
+    },
+    {
+      "path": "docs/gui-screenshots/safe-exit.png",
+      "sha256": "sha256:fee3007f4dfa092d3bee1ed27f2b54999ba8fd6edba3b05e33ab59b4136225b5"
+    },
+    {
+      "path": "docs/gui-screenshots/targeted-reopen.png",
+      "sha256": "sha256:75c0e493e5512d88caa6fa0946064a9c7cbe855abebda68c2f10869cc7fc941f"
+    },
+    {
+      "path": "docs/gui-screenshots/transport-roundtrip.png",
+      "sha256": "sha256:53cc075a4d1bb1a8058c2ce19675dea34f853b7990a76e0355a43a08560127b9"
+    },
+    {
+      "path": "docs/recordings/add-alternative.cast",
+      "sha256": "sha256:b9e1ed8a4a442cd32d315c5867894486db6ca059de19ebc27376ae7a12eed656"
+    },
+    {
+      "path": "docs/recordings/alternative-clarify.cast",
+      "sha256": "sha256:006ba3631f0836bd3929c2eece3e396300132b3949d18c1e6645f8bedf7ffa63"
+    },
+    {
+      "path": "docs/recordings/basic-select.cast",
+      "sha256": "sha256:319ae8e4afe4e4e49c12cc67547ffcbdf93f25669a709206aba1b145f570697d"
+    },
+    {
+      "path": "docs/recordings/batch-clarify.cast",
+      "sha256": "sha256:5e560408048e5d1c7d456874f5b13a4ab8cc5ed8410a8e5d3ed20ea542a4bbaa"
+    },
+    {
+      "path": "docs/recordings/batch-partial.cast",
+      "sha256": "sha256:cf3b5a26436f89ca94635a471b435c055f23ca6de8fa68eb5c13f61bb6cca81a"
+    },
+    {
+      "path": "docs/recordings/board-directive-entry.cast",
+      "sha256": "sha256:f7ddab126b4d1e86d158c5ab005d0e9c01549594e39b6d7b715686b8ffd6d090"
+    },
+    {
+      "path": "docs/recordings/cancel-after-review.cast",
+      "sha256": "sha256:c5af36e8bf5a3f7db3fb9fcb8ee9cef525b0a74c2eca42d469e5d60d09096e1f"
+    },
+    {
+      "path": "docs/recordings/clarify-ownership.cast",
+      "sha256": "sha256:86c6c07fd0f1f83d271bac0f60da6b77004c7301825e2c279e5358100a25d45a"
+    },
+    {
+      "path": "docs/recordings/company-dashboard.cast",
+      "sha256": "sha256:88aacc47c232b516989061c652c4ccddd523e3cb365fad42cf8f2b3c357406bb"
+    },
+    {
+      "path": "docs/recordings/escape-exit.cast",
+      "sha256": "sha256:65c9391b0a8cbb4d3ccaea5b395096a7bfcb2b07a8de71963bbf10569292f54c"
+    },
+    {
+      "path": "docs/recordings/evidence-then-reject.cast",
+      "sha256": "sha256:0435b1346f10d08cae760dad7e759dda1f318698dea930226ed57659385c2562"
+    },
+    {
+      "path": "docs/recordings/explicit-document-views.cast",
+      "sha256": "sha256:47eec33c0e5ff937bd04255221fd080320e44c4df310cc14406abbe8727d84de"
+    },
+    {
+      "path": "docs/recordings/full-contest.cast",
+      "sha256": "sha256:9e3cfbb489a4cf7d0bd9585f0d995de1a8e25a4ba5a9a582cc74a66530ec6153"
+    },
+    {
+      "path": "docs/recordings/hierarchy-drill-down.cast",
+      "sha256": "sha256:74cffaac6b3079d0e40fb34042afca6a3be9c3dda278d1243d0494e2f3928464"
+    },
+    {
+      "path": "docs/recordings/more-evidence.cast",
+      "sha256": "sha256:4bba28047c23cbd9eae2dceb45b93e2755582e43a52279fb34b522dd6037129c"
+    },
+    {
+      "path": "docs/recordings/multi-point-handoff.cast",
+      "sha256": "sha256:2b1ed70c6ab50f6eed8d83fbf93f1bef370b2327be0494472fb22686bf90fd90"
+    },
+    {
+      "path": "docs/recordings/navigate-documents.cast",
+      "sha256": "sha256:322de48000e214e696fb287640ff305b0acb2d763143be45ae03b5e325712168"
+    },
+    {
+      "path": "docs/recordings/pause-resume-session.cast",
+      "sha256": "sha256:20fed01ecd46420ef15fcf1f7bca6509efd06d131702ed47269ebd55caac4b58"
+    },
+    {
+      "path": "docs/recordings/proposal-reject.cast",
+      "sha256": "sha256:8f9bc1e2f9e540621c0ced89111ba3d4690a074ed7725cbb023fac21cce90c38"
+    },
+    {
+      "path": "docs/recordings/proposal-with-navigation.cast",
+      "sha256": "sha256:2278fdd2759a197338ff64257edecca37d38e3df218e7afd5f39073de6ed64ab"
+    },
+    {
+      "path": "docs/recordings/reask-after-gap.cast",
+      "sha256": "sha256:ac37731b57622f6e2ad934386c9807c000655f67d2106bf660b72a91d785e703"
+    },
+    {
+      "path": "docs/recordings/reject-risk.cast",
+      "sha256": "sha256:cbcb433d7126a232b5464a2def7c1862d4a75badc93c03b980ca0944fdc9d00a"
+    },
+    {
+      "path": "docs/recordings/reopen-save.cast",
+      "sha256": "sha256:55a451cf8cd25c6cbdfe18f9db3e3c85067321e725c42c0216721983e21f9748"
+    },
+    {
+      "path": "docs/recordings/revise-selection.cast",
+      "sha256": "sha256:a8dbab17001ba301b2b02bd992dfc70ce8ef11606a11362ba2b623bef6e802f7"
+    },
+    {
+      "path": "docs/recordings/revision-reopen.cast",
+      "sha256": "sha256:5f7c3f2eab0b8159c2e30854512fa6f82ffb1d5fc74c9da10e2fd5ec842338f9"
+    },
+    {
+      "path": "docs/recordings/rollback-conflict-display.cast",
+      "sha256": "sha256:e96584e2260c1594f3e4cc9596a94310514485086c5c7766fe9af6402ed23768"
+    },
+    {
+      "path": "docs/recordings/safe-exit.cast",
+      "sha256": "sha256:ac6d85dfa6f19ca2ce839a30df495072f33ede74d9a84394a477d14bba51b27a"
+    },
+    {
+      "path": "docs/recordings/targeted-reopen.cast",
+      "sha256": "sha256:1a66b1f6d759ab81b7be538a4318940c95e223dcf996309de0adfaf5f5693032"
+    },
+    {
+      "path": "docs/recordings/transport-roundtrip.cast",
+      "sha256": "sha256:b4c49bbfd0faef5ce9b03a6dfc2cd823e590ebdfcbf23b190d082480f2d30eb6"
+    },
+    {
+      "path": "docs/screenshots/add-alternative.svg",
+      "sha256": "sha256:92c9f3fa015d973a5785d836f5b8197b25a3e3ef14a04affc3876572d6f64738"
+    },
+    {
+      "path": "docs/screenshots/alternative-clarify.svg",
+      "sha256": "sha256:dd3762d7f2f0eb41356b19d03f2145c561de26284c1dde35f025759b472eb270"
+    },
+    {
+      "path": "docs/screenshots/basic-select.svg",
+      "sha256": "sha256:decc93e26c6022104087a61539b41fa583958e1bc9999f9f46704c0320515992"
+    },
+    {
+      "path": "docs/screenshots/batch-clarify.svg",
+      "sha256": "sha256:a3517b39f933ec2972940854a79908bdfc5af7ca43eef8153ba0bae778e4804b"
+    },
+    {
+      "path": "docs/screenshots/batch-partial.svg",
+      "sha256": "sha256:e2657b4ed32336a728f6b8d4812b2b873413fc2f061e8939c44a3a73ef250f53"
+    },
+    {
+      "path": "docs/screenshots/board-directive-entry.svg",
+      "sha256": "sha256:184851446d61d16894316eb6fc8eb32023f7a79c084c701e8f7eddf28f43d9c7"
+    },
+    {
+      "path": "docs/screenshots/cancel-after-review.svg",
+      "sha256": "sha256:99d34fec2669ebea17f5faf0266f56ec62e9327945873683f1e4ab0dfd78da3e"
+    },
+    {
+      "path": "docs/screenshots/clarify-ownership.svg",
+      "sha256": "sha256:6a98de1589226d372c6b9f14e011f700b4f5310f1082e63d9a612b5cdf016029"
+    },
+    {
+      "path": "docs/screenshots/company-dashboard.svg",
+      "sha256": "sha256:d68cc9c050266d76cb5fee0e7651e73588c9c11f85752b21a3038e424f916faa"
+    },
+    {
+      "path": "docs/screenshots/escape-exit.svg",
+      "sha256": "sha256:e9a812eac6b460dfb3bb78393b862fb927985443606497d75f7e282c7a030b30"
+    },
+    {
+      "path": "docs/screenshots/evidence-then-reject.svg",
+      "sha256": "sha256:b4e3fa2c1f035091bd537d7089167a51ff10f199bbdc6cf5d3ee7d269d818fbd"
+    },
+    {
+      "path": "docs/screenshots/explicit-document-views.svg",
+      "sha256": "sha256:bdbaabe701a16e7d5adb7012e69e94fb612a7add0dea52b0af4110a93b5eca88"
+    },
+    {
+      "path": "docs/screenshots/full-contest.svg",
+      "sha256": "sha256:17a14d53b67f324c453a3962e1e077cb9cc696a1c82a6cece727bf6da812afab"
+    },
+    {
+      "path": "docs/screenshots/hierarchy-drill-down.svg",
+      "sha256": "sha256:eaf643ceb77428e7d0d8302212ee3e9a2d5af63c6110240742d3bab70d7ac74a"
+    },
+    {
+      "path": "docs/screenshots/more-evidence.svg",
+      "sha256": "sha256:d6ee94afbd2123efccf7a0a01b41711928ad680351f8ff8458d682bb3780a08f"
+    },
+    {
+      "path": "docs/screenshots/multi-point-handoff.svg",
+      "sha256": "sha256:a91136ca54e7d6543623805c849b1a0299a62860f2997f0f50fd5ac5f238432d"
+    },
+    {
+      "path": "docs/screenshots/navigate-documents.svg",
+      "sha256": "sha256:251a4a4dbed484859ba8fa16ac9726c098eec75617d3b6a65256afceb45447b2"
+    },
+    {
+      "path": "docs/screenshots/pause-resume-session.svg",
+      "sha256": "sha256:c634e12c1145a561e1f97d9a0b8d68b9883465f7059cd1314fadad3df34d3357"
+    },
+    {
+      "path": "docs/screenshots/proposal-reject.svg",
+      "sha256": "sha256:b4476cc74754fe1be1ceab16abc287b5f8412565375b95b6dd8d663bb5761dcd"
+    },
+    {
+      "path": "docs/screenshots/proposal-with-navigation.svg",
+      "sha256": "sha256:c7b6e58dafe66e23c3ffca0493f9850c70edf6fca7c22359d84c54a406ac5b80"
+    },
+    {
+      "path": "docs/screenshots/reask-after-gap.svg",
+      "sha256": "sha256:744f2f1a3f11b784868b15917f8820d2663309e4c518bef26c8e57e71ccb35ef"
+    },
+    {
+      "path": "docs/screenshots/reject-risk.svg",
+      "sha256": "sha256:1406477e116082fcdbc6bbd947810da53c64f9a730564cc71482354c0cc93f95"
+    },
+    {
+      "path": "docs/screenshots/reopen-save.svg",
+      "sha256": "sha256:84fd8829b7c913818645a6e8437a17aa30d358e478f9b733e40b3836d050c39f"
+    },
+    {
+      "path": "docs/screenshots/revise-selection.svg",
+      "sha256": "sha256:d907803e945666f79e3eac7ddeb6658188b19f7ac72880fce702d4f9e3511894"
+    },
+    {
+      "path": "docs/screenshots/revision-reopen.svg",
+      "sha256": "sha256:1e68bf1fd86ea0a0b46dd5c403d2c4f2e8df9b58cd78e0da1a8eb3c65d0e66c1"
+    },
+    {
+      "path": "docs/screenshots/rollback-conflict-display.svg",
+      "sha256": "sha256:465f34c6489800b5d562921dc3785b60e4e576deb5eafecd04d39593ceb02f46"
+    },
+    {
+      "path": "docs/screenshots/safe-exit.svg",
+      "sha256": "sha256:2f0c010a85846d869939a196e62f2caed29153333f0412507595e18844f058f6"
+    },
+    {
+      "path": "docs/screenshots/targeted-reopen.svg",
+      "sha256": "sha256:922117e5aec4e00369269435cae68c5943adf1cd7e265bc4802b4f242e86bc47"
+    },
+    {
+      "path": "docs/screenshots/transport-roundtrip.svg",
+      "sha256": "sha256:8fe344ddba51dd2318dec06cade54761cf2d8e7955ed4cf0b443678312ca4d3f"
+    }
+  ],
+  "generation_command": "python tools/run_scenarios.py && python tools/run_gui_scenarios.py --output-dir artifacts/gui-screenshots && python tools/generate_scenario_docs.py && python tools/scenario_provenance.py --write",
+  "input": {
+    "path": "scenarios/corpus.json",
+    "sha256": "sha256:12958ecc1707ceeb8658229cae675f89d25e249fca0701b2fa688100ac30a755"
+  },
+  "renderer": {
+    "files": [
+      {
+        "path": "src/awtui/__init__.py",
+        "sha256": "sha256:b84262ecbccf966af339b2cfbcdb387b9bd76ddd704324a263a644d02e4576cf"
+      },
+      {
+        "path": "src/awtui/app.py",
+        "sha256": "sha256:39dd364994c035d72f97d8b8a0aac49c26b2403e4d02714983633a009dbf7025"
+      },
+      {
+        "path": "src/awtui/awg.py",
+        "sha256": "sha256:3eb7ed2b978d8c2c422020192088d170802dbb7c9c84cc4e449913854465f571"
+      },
+      {
+        "path": "src/awtui/awq.py",
+        "sha256": "sha256:a1954309d2b5e076a01b349fead628c5c9170c1d184980375c722b18e8ef8ac0"
+      },
+      {
+        "path": "src/awtui/boundary.py",
+        "sha256": "sha256:d8418a62b81e30a7762a0ff8982ffec9db8fe5b04376ff38ae086ab733d9c75f"
+      },
+      {
+        "path": "src/awtui/bridge.py",
+        "sha256": "sha256:5932761a58437ed7b7724588d195399e036cc0da59f3cfddc84545ac193dac7c"
+      },
+      {
+        "path": "src/awtui/connect.py",
+        "sha256": "sha256:8fb38d3d559b825ca79e4b7143cba3f38635da64c01423cc41c3185cad3b094d"
+      },
+      {
+        "path": "src/awtui/coordinator.py",
+        "sha256": "sha256:6f364dd58448e83b90e7accf09eea001beed0f7e090521d927ca1b2a590fc137"
+      },
+      {
+        "path": "src/awtui/dashboard.py",
+        "sha256": "sha256:c095f50c86e851c0d9ad930baa51cfd7232135b021421879e5aedac7a0d3a62d"
+      },
+      {
+        "path": "src/awtui/discussion.py",
+        "sha256": "sha256:1ed1d19e774361f5c50034041f26e3b44e2d4997911111690558d77f97624fba"
+      },
+      {
+        "path": "src/awtui/graph.py",
+        "sha256": "sha256:70cd6b7a5fc7513526389dc9caab6ae89cd246e3680f2080094f18bd87350271"
+      },
+      {
+        "path": "src/awtui/gui.py",
+        "sha256": "sha256:8fae27fc9e47e27393eef4b8d4567d3fb44cd3b1de1aea9053791ac45335ab3d"
+      },
+      {
+        "path": "src/awtui/host.py",
+        "sha256": "sha256:5e4e11afa05a8d6d1a93eb50ccdd9d139d19c25ae5359dc6c9f6f8668412f0f8"
+      },
+      {
+        "path": "src/awtui/journal.py",
+        "sha256": "sha256:0f9875ebfcd0e084da65ac7121d1906ad0f3ba05f78b1a5a12beedf606192986"
+      },
+      {
+        "path": "src/awtui/launcher.py",
+        "sha256": "sha256:f928f2c2e36cec8b45f34fbd9132b528b9618bf63abdb0a59bfa21b8ef964842"
+      },
+      {
+        "path": "src/awtui/live.py",
+        "sha256": "sha256:3bc8d63fd16095ec50473562276f634be1fd95f359bc96892f60666a6fb09d5b"
+      },
+      {
+        "path": "src/awtui/markdown.py",
+        "sha256": "sha256:b9d4fc41876f4b63c96eeda728fe92e0371157e9c9bcbfc2d2d4c1b48c2a7209"
+      },
+      {
+        "path": "src/awtui/reconciliation.py",
+        "sha256": "sha256:24af77c5ef096d496b35227d22d071db677bd90e1d33709f6cf36f8aed3c9266"
+      },
+      {
+        "path": "src/awtui/scenario_helper.py",
+        "sha256": "sha256:01f2be6f343512315daf0b38d91113a19957641dbed60767080a15a41e528a31"
+      },
+      {
+        "path": "src/awtui/shortcut.py",
+        "sha256": "sha256:64bce57ac7f7cba07ec791dcd8e998800b022141066e9577dce4d745115db766"
+      },
+      {
+        "path": "src/awtui/tokenctl.py",
+        "sha256": "sha256:c0e8c525d9e132c6d8fd2cdcac8244801e763a048db37537e8247eddebc7186a"
+      },
+      {
+        "path": "src/awtui/tokens.py",
+        "sha256": "sha256:9a55fced86ee08728b31dd0036777f62387dc6419df8337c64724d7371958847"
+      },
+      {
+        "path": "src/awtui/transport.py",
+        "sha256": "sha256:37c56be678f930979916af2ed5254b417bce5c8d668dbc5d5d55ca40f2c92069"
+      },
+      {
+        "path": "src/awtui/transport_io.py",
+        "sha256": "sha256:47fb0e1f56b251839da11e7096723064d2530b4fe5ac55666ca46193bd0b7b19"
+      },
+      {
+        "path": "tools/check_scenario_docs.py",
+        "sha256": "sha256:3545ac8f68c4a4d737d69ebd90d56eef34db0a01d0662057275d1d667eaae69b"
+      },
+      {
+        "path": "tools/generate_scenario_docs.py",
+        "sha256": "sha256:ccad574bb86b710b8e92edd738fa54bcbb25697556ad7f7159b12e898f5873aa"
+      },
+      {
+        "path": "tools/run_gui_scenarios.py",
+        "sha256": "sha256:950d64d25fcba7f52a693594a3d6a924bfb2ea78eb348680d02b3e8c5fe6ce42"
+      },
+      {
+        "path": "tools/run_scenarios.py",
+        "sha256": "sha256:a0d2bf5685a063cb3b2a82e36933ef0d1b11c24db5666ad0068bb2d3884d3199"
+      },
+      {
+        "path": "tools/scenario_provenance.py",
+        "sha256": "sha256:ce531f69c489b00b4e621c617bbaba29968a80c6f3df5178f15afd583748fa1f"
+      },
+      {
+        "path": "tools/validate_scenarios.py",
+        "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
+      }
+    ],
+    "version": "sha256:3398f0d0662f3564baa0dc49f9cf7354a321235e5b78d15f6fbdb1055b4bfc39"
+  },
+  "schema_version": 1,
+  "source_release": {
+    "project": "agent-workflow-ui",
+    "version": "0.6.0"
+  }
+}
