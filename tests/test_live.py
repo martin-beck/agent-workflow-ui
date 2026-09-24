@@ -200,6 +200,19 @@ def test_user_proposal_is_visible_and_can_be_replaced_before_commit():
     assert "User: C" not in app.awtui_panes[1].text
 
 
+def test_live_decision_list_shows_effective_window_rollback_and_conflict():
+    app = build_application(decisions=[{
+        "point_id": "p", "anchor": "design:L2", "question": "Choose",
+        "effective_from": "r4", "effective_until": "r7", "rollback_of": "p-old",
+        "conflict_reason": "evidence diverged",
+        "proposals": [{"label": "A"}, {"label": "B"}],
+    }])
+    text = app.awtui_panes[1].text
+    assert "rollback:p-old" in text
+    assert "conflict:evidence diverged" in text
+    assert "effective:r4..r7" in text
+
+
 def test_arrow_navigation_reopens_answered_decision_before_replacement():
     app = build_application(
         design_document="# Design\n\nBoundary phrase",

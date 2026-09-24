@@ -139,7 +139,15 @@ class LiveInteraction:
                 status = "↩ rejected"
             else:
                 status = "✎ proposal" if user_proposal else "unresolved"
-            lines.append(f"{'▶' if i == self.point_index else ' '} {point.point_id} [{status}]  {point.anchor}")
+            markers = []
+            if point.rollback_of:
+                markers.append(f"rollback:{point.rollback_of}")
+            if point.conflict_reason:
+                markers.append(f"conflict:{point.conflict_reason}")
+            if point.effective_from or point.effective_until:
+                markers.append(f"effective:{point.effective_from or 'open'}..{point.effective_until or 'open'}")
+            suffix = "  " + " | ".join(markers) if markers else ""
+            lines.append(f"{'▶' if i == self.point_index else ' '} {point.point_id} [{status}]  {point.anchor}{suffix}")
         lines += ["", f"Decision: {self.point.question}"]
         response = self.responses.get(self.point.point_id)
         user_proposal = next((proposal for proposal in self.point.proposals if proposal.label.startswith("User: ")), None)
@@ -201,7 +209,7 @@ def _packet_from_decisions(decisions, design_document: str, workplan: str) -> Di
         proposals = tuple(Proposal(p.get("label", "Proposal"), p.get("rationale", "No rationale recorded"), float(p.get("confidence", .5)), p.get("tradeoffs", "No trade-offs recorded")) for p in raw.get("proposals", []))
         while len(proposals) < 2:
             proposals += (Proposal("Request evidence", "Gather missing evidence", .5, "Delays decision"),)
-        points.append(PacketPoint(raw["point_id"], raw.get("anchor", "document:1"), raw.get("question", "What should happen?"), proposals, raw.get("helper", raw.get("implications", "Review downstream implications")), raw.get("evidence_gap", ""), highlight=raw.get("highlight", raw.get("question", "")), document_highlights=dict(raw.get("highlights", {}))))
+        points.append(PacketPoint(raw["point_id"], raw.get("anchor", "document:1"), raw.get("question", "What should happen?"), proposals, raw.get("helper", raw.get("implications", "Review downstream implications")), raw.get("evidence_gap", ""), highlight=raw.get("highlight", raw.get("question", "")), document_highlights=dict(raw.get("highlights", {})), effective_from=str(raw.get("effective_from", "")), effective_until=str(raw.get("effective_until", "")), rollback_of=str(raw.get("rollback_of", "")), conflict_reason=str(raw.get("conflict_reason", ""))))
     return DiscussionPacket("interactive", 1, tuple(points), "design")
 
 

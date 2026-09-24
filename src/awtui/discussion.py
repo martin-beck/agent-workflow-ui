@@ -28,6 +28,12 @@ class PacketPoint:
     # the design and work-plan panes.  Older packets continue to use
     # ``highlight`` as their fallback target.
     document_highlights: dict[str, str] = field(default_factory=dict)
+    # Coordinator checkpoint metadata.  These fields are optional so packets
+    # from older bridge versions remain renderable.
+    effective_from: str = ""
+    effective_until: str = ""
+    rollback_of: str = ""
+    conflict_reason: str = ""
 
     def __post_init__(self):
         if not self.point_id or not self.anchor or len(self.proposals) < 2:
@@ -53,10 +59,18 @@ class DiscussionPacket:
     def batch_status(self, responses: dict[str, "DecisionResponse"] | None = None) -> tuple[str, ...]:
         """Return stable per-point status lines for a batched live view."""
         responses = responses or {}
-        return tuple(
-            f"{point.point_id}: {'answered' if point.point_id in responses else 'unresolved'}"
-            for point in self.points
-        )
+        lines = []
+        for point in self.points:
+            state = 'answered' if point.point_id in responses else 'unresolved'
+            if point.rollback_of:
+                state += f" | rollback of {point.rollback_of}"
+            if point.conflict_reason:
+                state += f" | conflict: {point.conflict_reason}"
+            if point.effective_from or point.effective_until:
+                window = f"{point.effective_from or 'open'}..{point.effective_until or 'open'}"
+                state += f" | effective {window}"
+            lines.append(f"{point.point_id}: {state}")
+        return tuple(lines)
 
 
 def render_batch(packet: DiscussionPacket, responses: dict[str, "DecisionResponse"] | None = None, *, coupling_warning: str = "") -> str:
