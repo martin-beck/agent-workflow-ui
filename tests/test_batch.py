@@ -23,3 +23,25 @@ def test_batch_render_marks_effective_window_rollback_and_conflict():
     assert "effective r4..r7" in output
     assert "rollback of p2" in output
     assert "conflict: evidence diverged" in output
+
+
+def test_batch_workspace_orders_dependencies_and_explains_blocked_points():
+    proposals = _point("root").proposals
+    child = PacketPoint("child", "plan:2", "child", proposals, "impact", group="rollout", ar_ref="AR-2", depends_on=("root",), evidence_refs=("evidence:child",))
+    root = PacketPoint("root", "design:1", "root", proposals, "impact", group="design", ar_ref="AR-1")
+    packet = DiscussionPacket("batch", 4, (child, root))
+    assert [point.point_id for point in packet.ordered_points()] == ["root", "child"]
+    assert packet.summary()["blocked"] == 1
+    assert packet.dependency_block(child) == "waiting for: root"
+    assert [point.point_id for point in packet.filtered_points(group="rollout")] == ["child"]
+    assert packet.filtered_points(query="AR-1")[0].point_id == "root"
+
+
+def test_batch_workspace_progress_unblocks_dependent_decision():
+    proposals = _point("root").proposals
+    root = PacketPoint("root", "design:1", "root", proposals, "impact")
+    child = PacketPoint("child", "plan:2", "child", proposals, "impact", depends_on=("root",))
+    packet = DiscussionPacket("batch", 4, (root, child))
+    response = type("Response", (), {"disposition": "select"})()
+    assert packet.status(child, {"root": response}) == "unresolved"
+    assert packet.summary({"root": response})["blocked"] == 0

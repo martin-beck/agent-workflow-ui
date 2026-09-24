@@ -77,6 +77,9 @@ class LiveInteraction:
     """Mutable view-model for point/proposal selection and batch responses."""
     def __init__(self, packet: DiscussionPacket, *, paused_sessions: list[dict] | None = None):
         self.packet, self.point_index, self.proposal_index = packet, 0, 0
+        self.filter_query = ""
+        self.filter_group = ""
+        self.include_answered = True
         self.document_mode = packet.document
         self.responses: dict[str, DecisionResponse] = {}
         self.input_mode = False
@@ -95,7 +98,24 @@ class LiveInteraction:
         mode = document_mode or self.document_mode
         return self.point.document_highlights.get(mode, self.point.highlight or self.point.question)
     def move_point(self, delta: int):
-        self.point_index = max(0, min(len(self.packet.points)-1, self.point_index + delta)); self.proposal_index = 0
+        visible = self.visible_points()
+        if not visible: return
+        current = next((index for index, point in enumerate(visible) if point.point_id == self.point.point_id), 0)
+        target = visible[max(0, min(len(visible)-1, current + delta))]
+        self.point_index = next(index for index, point in enumerate(self.packet.points) if point.point_id == target.point_id)
+        self.proposal_index = 0
+
+    def visible_points(self):
+        return self.packet.filtered_points(self.responses, query=self.filter_query, group=self.filter_group, include_answered=self.include_answered)
+
+    def set_filter(self, query: str = "", group: str = "", *, include_answered: bool | None = None) -> None:
+        self.filter_query, self.filter_group = query, group
+        if include_answered is not None: self.include_answered = include_answered
+        visible = self.visible_points()
+        if visible:
+            self.point_index = next(index for index, point in enumerate(self.packet.points) if point.point_id == visible[0].point_id)
+            self.proposal_index = 0
+        self._refresh_callback()
     def move_proposal(self, delta: int):
         # A previously selected proposal is provisional until the user leaves
         # the current choice.  Moving left/right explicitly re-opens the
@@ -121,6 +141,9 @@ class LiveInteraction:
         self.saved = False
         self._refresh_callback()
     def respond(self, disposition: str) -> DecisionResponse:
+        blocked = self.packet.dependency_block(self.point, self.responses)
+        if blocked:
+            raise ValueError(f"decision is blocked: {blocked}")
         user = self.proposal if self.proposal.label.startswith("User: ") else None
         response = DecisionResponse(self.point.point_id, disposition, self.proposal.label if disposition == "select" else None, user, user is not None)
         self.responses[self.point.point_id] = response
@@ -129,14 +152,21 @@ class LiveInteraction:
         return response
     def render_points(self) -> str:
         lines = []
-        selected = sum(response.disposition == "select" for response in self.responses.values())
+        summary = self.packet.summary(self.responses)
+        selected = summary["answered"]
         clarification = sum(response.disposition == "clarify" for response in self.responses.values())
-        unresolved = len(self.packet.points) - selected
+        unresolved = summary["unresolved"] + summary["blocked"]
         save_state = "saved" if self.saved else "unsaved"
-        lines.append(f"Overall: {selected}/{len(self.packet.points)} selected | {clarification} clarification requested | {unresolved} remaining | state {save_state}")
+        lines.append(f"Overall: {selected}/{len(self.packet.points)} selected | {clarification} clarification requested | {summary['blocked']} blocked | {unresolved} remaining | state {save_state}")
+        if self.filter_query or self.filter_group or not self.include_answered:
+            lines.append(f"Filter: {self.filter_query or '*'} | group: {self.filter_group or '*'} | showing {len(self.visible_points())}/{len(self.packet.points)}")
         lines.append("")
+        visible_ids = {point.point_id for point in self.visible_points()}
         for i, point in enumerate(self.packet.points):
+            if point.point_id not in visible_ids:
+                continue
             response = self.responses.get(point.point_id)
+            blocked = self.packet.dependency_block(point, self.responses)
             user_proposal = next((proposal for proposal in point.proposals if proposal.label.startswith("User: ")), None)
             if response and response.disposition == "select":
                 status = "✅ answered"
@@ -145,7 +175,7 @@ class LiveInteraction:
             elif response and response.disposition == "reject":
                 status = "↩ rejected"
             else:
-                status = "✎ proposal" if user_proposal else "unresolved"
+                status = f"⛔ blocked ({blocked})" if blocked else ("✎ proposal" if user_proposal else "unresolved")
             markers = []
             if point.rollback_of:
                 markers.append(f"rollback:{point.rollback_of}")
@@ -171,7 +201,10 @@ class LiveInteraction:
         response = self.responses.get(self.point.point_id)
         prefix = "Clarification requested: this decision is not answered.\n\n" if response and response.disposition == "clarify" else ""
         cards = render_paused_cards(self.paused_sessions, selected=self.paused_session_index) if self.paused_sessions else ""
-        return (cards + ("\n\n" if cards else "") + prefix + f"Proposal {self.proposal_index + 1}/{len(self.point.proposals)}: {p.label}\n\nRationale: {p.rationale}\nConfidence: {p.confidence:.2f}\nTrade-offs: {p.tradeoffs}\n\nAnchor: {self.point.anchor}\nHighlight: {self.active_highlight()}\nImplications: {self.point.implications}\nEvidence gap: {self.point.evidence_gap or 'none recorded'}\nHuman intent is separate from implementation and quality evidence.")
+        evidence = ", ".join(self.point.evidence_refs) or "none recorded"
+        blocked = self.packet.dependency_block(self.point, self.responses)
+        blocked_line = f"\nBlocked: {blocked}" if blocked else ""
+        return cards + ("\n\n" if cards else "") + prefix + f"Proposal {self.proposal_index + 1}/{len(self.point.proposals)}: {p.label}\n\nRationale: {p.rationale}\nConfidence: {p.confidence:.2f}\nTrade-offs: {p.tradeoffs}\n\nAnchor: {self.point.anchor}\nHighlight: {self.active_highlight()}\nImplications: {self.point.implications}\nEvidence refs: {evidence}\nEvidence gap: {self.point.evidence_gap or 'none recorded'}{blocked_line}\nHuman intent is separate from implementation and quality evidence."
 
     def resume_selected_session(self) -> dict:
         if not self.paused_sessions:
@@ -222,7 +255,7 @@ def _packet_from_decisions(decisions, design_document: str, workplan: str) -> Di
         proposals = tuple(Proposal(p.get("label", "Proposal"), p.get("rationale", "No rationale recorded"), float(p.get("confidence", .5)), p.get("tradeoffs", "No trade-offs recorded")) for p in raw.get("proposals", []))
         while len(proposals) < 2:
             proposals += (Proposal("Request evidence", "Gather missing evidence", .5, "Delays decision"),)
-        points.append(PacketPoint(raw["point_id"], raw.get("anchor", "document:1"), raw.get("question", "What should happen?"), proposals, raw.get("helper", raw.get("implications", "Review downstream implications")), raw.get("evidence_gap", ""), highlight=raw.get("highlight", raw.get("question", "")), document_highlights=dict(raw.get("highlights", {})), effective_from=str(raw.get("effective_from", "")), effective_until=str(raw.get("effective_until", "")), rollback_of=str(raw.get("rollback_of", "")), conflict_reason=str(raw.get("conflict_reason", ""))))
+        points.append(PacketPoint(raw["point_id"], raw.get("anchor", "document:1"), raw.get("question", "What should happen?"), proposals, raw.get("helper", raw.get("implications", "Review downstream implications")), raw.get("evidence_gap", ""), highlight=raw.get("highlight", raw.get("question", "")), document_highlights=dict(raw.get("highlights", {})), effective_from=str(raw.get("effective_from", "")), effective_until=str(raw.get("effective_until", "")), rollback_of=str(raw.get("rollback_of", "")), conflict_reason=str(raw.get("conflict_reason", "")), ar_ref=str(raw.get("ar_id", raw.get("ar_ref", ""))), group=str(raw.get("group", raw.get("decision_class", ""))), depends_on=tuple(raw.get("depends_on", ())), evidence_refs=tuple(raw.get("evidence_refs", ())), blocked_reason=str(raw.get("blocked_reason", ""))))
     return DiscussionPacket("interactive", 1, tuple(points), "design")
 
 
@@ -300,7 +333,7 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
             rendered += "\nChildren: " + (", ".join(child.title for child in hierarchy.children) or "none")
         return rendered
     dashboard_view = TextArea(text=dashboard_text(), read_only=True, scrollbar=True)
-    footer = TextArea(text="↑/↓: decision  ←/→: proposal  tab/w/d: workplan/design  b: dashboard  [/]: hierarchy up/down  " + footer_text() + "  |  ?: help", read_only=True, height=1, style="class:footer")
+    footer = TextArea(text="↑/↓: decision  ←/→: proposal  g: group  u: unresolved-only  x: clear filter  tab/w/d: workplan/design  b: dashboard  [/]: hierarchy up/down  " + footer_text() + "  |  ?: help", read_only=True, height=1, style="class:footer")
     help_view = TextArea(text=help_text(), read_only=True, scrollbar=True, focusable=True)
     help_panel = ConditionalContainer(
         Frame(help_view, title="Help / keyboard / focus", style="class:help-pane"),
@@ -385,7 +418,12 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
         response = None
         previous_response = interaction.responses.get(interaction.point.point_id) if packet else None
         if packet and event_type in {"select", "reject", "clarify"}:
-            response = interaction.respond(event_type)
+            try:
+                response = interaction.respond(event_type)
+            except ValueError as error:
+                helper_view.text = str(error) + "\n\nReview the prerequisite decision or inspect its evidence references."
+                refresh()
+                return
         acknowledgement: EventAcknowledgement | None = None
         if transport is not None and event_type != "safe-exit":
             payload = {"point_id": interaction.point.point_id}
@@ -539,6 +577,23 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     def design_key(event):
         if interaction.input_mode: event.app.current_buffer.insert_text("d")
         else: interaction.document_mode = "design"; interaction._manual_document_switch = True; refresh()
+    @bindings.add("u")
+    def unresolved_only_key(event):
+        if not interaction.input_mode:
+            interaction.set_filter(include_answered=not interaction.include_answered)
+            refresh()
+    @bindings.add("g")
+    def group_key(event):
+        if not interaction.input_mode:
+            groups = ("",) + interaction.packet.groups()
+            current = groups.index(interaction.filter_group) if interaction.filter_group in groups else 0
+            interaction.set_filter(group=groups[(current + 1) % len(groups)])
+            refresh()
+    @bindings.add("x")
+    def clear_filter_key(event):
+        if not interaction.input_mode:
+            interaction.set_filter()
+            refresh()
     @bindings.add("b")
     def dashboard_key(event):
         if not interaction.input_mode and board is not None:
