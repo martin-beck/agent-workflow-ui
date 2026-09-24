@@ -13,6 +13,7 @@ from .discussion import Proposal
 from .live import LiveInteraction, _default_packet, _packet_from_decisions
 from .actions import help_text
 from .persistence import DurableSessionPersistence
+from .audit import AuditControl, audit_from_context
 
 
 def _qt():
@@ -26,12 +27,14 @@ def _qt():
 class DecisionWindow:
     """Qt window exposing the complete batched decision interaction."""
 
-    def __init__(self, interaction: LiveInteraction, *, title: str = "Agent Workflow", on_event=None) -> None:
+    def __init__(self, interaction: LiveInteraction, *, title: str = "Agent Workflow", on_event=None,
+                 audit: AuditControl | None = None) -> None:
         QtCore, QtGui, QtWidgets = _qt()
         self.QtCore, self.QtGui, self.QtWidgets = QtCore, QtGui, QtWidgets
         self.interaction = interaction
         self._allow_close = False
         self.on_event = on_event
+        self.audit = audit or getattr(interaction, "audit", None)
         self.persistence = DurableSessionPersistence(interaction, on_event=on_event)
         self.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
         self.window = QtWidgets.QMainWindow()
@@ -87,6 +90,7 @@ class DecisionWindow:
         self.proposals = QtWidgets.QListWidget(); self.proposals.setAccessibleName("Decision proposals"); self.proposals.setToolTip("Choose a proposal, then use Select, Reject, or Clarify. A selected proposal can be reopened."); self.proposals.currentRowChanged.connect(self._select_proposal); right_layout.addWidget(self.proposals, 2)
         helper_title = QtWidgets.QLabel("DETAILS AND IMPLICATIONS"); helper_title.setObjectName("sectionTitle"); right_layout.addWidget(helper_title)
         self.helper = QtWidgets.QTextBrowser(); self.helper.setAccessibleName("Proposal details and implications"); self.helper.setToolTip("Rationale, confidence, trade-offs, evidence gaps, and the active document anchor."); right_layout.addWidget(self.helper, 3)
+        self.audit_view = QtWidgets.QTextBrowser(); self.audit_view.setAccessibleName("Audit and privacy control"); self.audit_view.setToolTip("Revision-bound operational history. Private proposal and document text is never exported."); self.audit_view.setVisible(False); right_layout.addWidget(self.audit_view, 2)
         buttons = QtWidgets.QHBoxLayout()
         actions = (("Select", self._select, "Record the highlighted proposal as the current human decision.", "primaryAction"), ("Reject", lambda: self._respond("reject"), "Reject this proposal and leave the decision unresolved.", "dangerAction"), ("Clarify", lambda: self._respond("clarify"), "Ask the Coordinator for clarification; this is not an acceptance.", ""), ("More evidence", self._request_evidence, "Keep this decision open and request additional evidence.", ""), ("Reopen", self._reopen, "Reopen an answered decision so another proposal can be selected.", ""), ("Edit own proposal", self._edit, "Create or edit a user-authored proposal for this decision.", ""))
         for label, callback, tip, object_name in actions:
@@ -96,6 +100,7 @@ class DecisionWindow:
         self.document_button = QtWidgets.QPushButton("Switch document"); self.document_button.setAccessibleName("Switch document"); self.document_button.setToolTip("Switch the active document view between Design and Work plan."); self.document_button.clicked.connect(self._switch_document); bottom.addWidget(self.document_button)
         save = QtWidgets.QPushButton("Save"); save.setAccessibleName("Save"); save.setToolTip("Persist the current selections to the revision-bound event journal."); save.clicked.connect(self._save); bottom.addWidget(save)
         self.help_button = QtWidgets.QPushButton("Help (?)"); self.help_button.setAccessibleName("Keyboard and accessibility help"); self.help_button.setToolTip("Show the complete keyboard map, focus order, and editing guidance."); self.help_button.clicked.connect(self._show_help); bottom.addWidget(self.help_button)
+        audit_button = QtWidgets.QPushButton("Audit"); audit_button.setAccessibleName("Audit and privacy controls"); audit_button.setToolTip("Show the revision-bound audit view and privacy-safe export controls."); audit_button.clicked.connect(self._show_audit); bottom.addWidget(audit_button)
         exit_button = QtWidgets.QPushButton("Save + Exit"); exit_button.setAccessibleName("Save and exit"); exit_button.setObjectName("primaryAction"); exit_button.setToolTip("Save all current selections and close the decision session."); exit_button.clicked.connect(self._save_exit); bottom.addWidget(exit_button)
         right_layout.addLayout(bottom)
         split.addWidget(right); split.setSizes([700, 420])
@@ -148,6 +153,28 @@ class DecisionWindow:
         box.setStandardButtons(self.QtWidgets.QMessageBox.StandardButton.Close)
         box.exec()
 
+    def _show_audit(self) -> None:
+        if self.audit is None:
+            self.audit_view.setPlainText("No audit context supplied; standalone preview has no Coordinator boundary.")
+        else:
+            self.audit_view.setPlainText(self.audit.render() +
+                                         "\n\nDry run: operations are validated against this revision before submission.\n"
+                                         "Export: use the privacy-safe redacted export API; unredacted export is disabled.")
+        self.audit_view.setVisible(not self.audit_view.isVisible())
+        if self.on_event is not None:
+            self.on_event({"event_type": "audit-view"})
+
+    def export_audit(self) -> dict[str, Any]:
+        """Return the only supported export: revision-bound and redacted."""
+        if self.audit is None:
+            raise ValueError("audit context is required for export")
+        return self.audit.export()
+
+    def audit_dry_run(self, event_type: str = "save") -> dict[str, Any]:
+        if self.audit is None:
+            raise ValueError("audit context is required for dry-run")
+        return self.audit.dry_run(event_type)
+
     def _select_point(self, index: int) -> None:
         if index >= 0:
             visible = self.interaction.visible_points()
@@ -171,6 +198,8 @@ class DecisionWindow:
             self.on_event({"event_type": disposition, "point_id": self.interaction.point.point_id,
                            "disposition": disposition,
                            "selected": self.interaction.responses[self.interaction.point.point_id].selected})
+        if self.audit is not None:
+            self.audit.record(disposition, detail=f"point {self.interaction.point.point_id}")
         self._refresh()
 
     def _select(self) -> None:
@@ -182,6 +211,8 @@ class DecisionWindow:
         if self.on_event is not None:
             self.on_event({"event_type": "request-more-evidence", "point_id": self.interaction.point.point_id,
                            "disposition": "request-more-evidence"})
+        if self.audit is not None:
+            self.audit.record("request-more-evidence", detail=f"point {self.interaction.point.point_id}")
 
     def _filter_changed(self) -> None:
         self.interaction.set_filter(self.filter.text(), self.group_filter.currentData() or "", include_answered=not self.unresolved_only.isChecked())
@@ -192,6 +223,8 @@ class DecisionWindow:
         self.interaction.saved = False
         if self.on_event is not None:
             self.on_event({"event_type": "reopen", "point_id": self.interaction.point.point_id})
+        if self.audit is not None:
+            self.audit.record("reopen", detail=f"point {self.interaction.point.point_id}")
         self._refresh()
 
     def _switch_document(self) -> None:
@@ -199,11 +232,15 @@ class DecisionWindow:
 
     def _save(self) -> None:
         self.persistence.save(); self._refresh()
+        if self.audit is not None:
+            self.audit.record("save", detail="snapshot requested")
 
     def _save_exit(self) -> None:
         self.persistence.save(exit=True)
         if self.on_event is not None:
             self.on_event({"event_type": "safe-exit", "point_id": self.interaction.point.point_id})
+        if self.audit is not None:
+            self.audit.record("safe-exit", detail="save and exit requested")
         self.window.close()
 
     def _close_event(self, event: Any) -> None:
@@ -299,18 +336,22 @@ class DecisionWindow:
         summary = self.interaction.packet.summary(self.interaction.responses)
         self.status.setText(f"Decision {self.interaction.point_index + 1}/{len(self.interaction.packet.points)}  |  {'saved' if self.interaction.saved else 'unsaved'}  |  answered {summary['answered']}/{summary['total']}  |  unresolved {summary['unresolved']}  |  blocked {summary['blocked']}")
         self._refresh_helper()
+        if self.audit is not None:
+            self.audit_view.setPlainText(self.audit.render())
 
     def run(self) -> int:
         self.window.show()
         return self.app.exec()
 
 
-def build_gui_application(*, design_document: str = "# Design\n\nAwaiting AR context", workplan: str = "# Work plan\n\nAwaiting AR context", decisions: list[dict[str, Any]] | None = None, on_event=None) -> DecisionWindow:
+def build_gui_application(*, design_document: str = "# Design\n\nAwaiting AR context", workplan: str = "# Work plan\n\nAwaiting AR context", decisions: list[dict[str, Any]] | None = None, on_event=None, audit: AuditControl | None = None, context: dict[str, Any] | None = None) -> DecisionWindow:
     packet = _packet_from_decisions(decisions, design_document, workplan) if decisions else _default_packet("design", "Review the design")
-    interaction = LiveInteraction(packet)
+    if audit is None and context is not None:
+        audit = audit_from_context(context)
+    interaction = LiveInteraction(packet, audit=audit)
     # Keep source Markdown in the shared view-model for both renderers.
     interaction.packet_document = lambda mode: design_document if mode == "design" else workplan  # type: ignore[attr-defined]
-    return DecisionWindow(interaction, on_event=on_event)
+    return DecisionWindow(interaction, on_event=on_event, audit=audit)
 
 
 def main() -> int:
