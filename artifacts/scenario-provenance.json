@@ -122,119 +122,119 @@
     },
     {
       "path": "docs/recordings/add-alternative.cast",
-      "sha256": "sha256:892ff17c41366eb86fd763d82eb966bd0765f971155c1daf76c9906ada86b4d3"
+      "sha256": "sha256:294aef08d66e2220005afdaf2a77a4a63142c4884215a685acd56fa0f5d40203"
     },
     {
       "path": "docs/recordings/alternative-clarify.cast",
-      "sha256": "sha256:1e8be4256af504d4b9a399d72ca648860c4094d2f8b1f54e4ec3c8b99d41023b"
+      "sha256": "sha256:30e5aaf66db066e6c1d6b55a1472c67ed84bc32586989acdb88afe4ac488e0b5"
     },
     {
       "path": "docs/recordings/basic-select.cast",
-      "sha256": "sha256:8861bb4955401bc69beb56a7b14ff26327d4315237eed4b3496ddd2d71fd15b0"
+      "sha256": "sha256:083a08683d362fdf8c9f695c367f0816ef8bc9d64108adaa90e0baf8886b24cb"
     },
     {
       "path": "docs/recordings/batch-clarify.cast",
-      "sha256": "sha256:59c796ae2b0aa71971387ee1348ce548e6b55d0c36e9dbde86075e4a38f11072"
+      "sha256": "sha256:db61defb591dedd9a6963cae4cdee07a104d1728a7cdfc925d449c865783068f"
     },
     {
       "path": "docs/recordings/batch-partial.cast",
-      "sha256": "sha256:96959ee091b1300c41609de202285e934e465c3f4b064e593a17406a75c291e8"
+      "sha256": "sha256:10ebc84141c623f2247b6c95835465e6a430fa77d791d9854b8a27823f93e596"
     },
     {
       "path": "docs/recordings/board-directive-entry.cast",
-      "sha256": "sha256:9a0c1f4d77e98f60d88c10c1b1834093df30436e6d389c3b9093fc04eeaa5dc6"
+      "sha256": "sha256:71f02fd56aade181f760d4d176915c0b00cce061be54dd9c2e63f157b64d2d50"
     },
     {
       "path": "docs/recordings/cancel-after-review.cast",
-      "sha256": "sha256:b5b5988b5e073c7ddecee378180a02d4df21c8ba8c2987814e1d9b9496379bd7"
+      "sha256": "sha256:3f26463e44d93da484506ca611766a48abeab590c97a64001f3e28e4b1cf8e32"
     },
     {
       "path": "docs/recordings/clarify-ownership.cast",
-      "sha256": "sha256:39aa23d3f16d1b6febabd7eec0b3e07efc47f3ffad811f9710a74b288197bc4b"
+      "sha256": "sha256:cb9d662f39e7b31a319338802078e4bc01886667479503cb5de90f6323145c58"
     },
     {
       "path": "docs/recordings/company-dashboard.cast",
-      "sha256": "sha256:052e8fd0e18fa1174ec39ad7afadbb7b5fccc4c4270e46c87a21fb534dd280cd"
+      "sha256": "sha256:7c6963550514dda562282986eaf03b613786270ac0814bd38a11c2f6043d6962"
     },
     {
       "path": "docs/recordings/escape-exit.cast",
-      "sha256": "sha256:d56841e279f465e523028d9e3b62c3052630961bcefcbba38bf0dccc6d7cbeaa"
+      "sha256": "sha256:73b108cc27737b923207734523378f05eb72b0ced82c3d40c3b3d428e4b1efae"
     },
     {
       "path": "docs/recordings/evidence-then-reject.cast",
-      "sha256": "sha256:589deb16ab04368a5951f42a7c063f739e2971128075a4664e22528304c5f091"
+      "sha256": "sha256:7112d605b7e3d65988246ebb9bea1f481baebfcf8a993140668bc14ae23c79a7"
     },
     {
       "path": "docs/recordings/explicit-document-views.cast",
-      "sha256": "sha256:f6ee9fff774e40e85e48e75e30bd4b5dfe86d0b35daab3fb8e9bc4fc350d3baf"
+      "sha256": "sha256:d01e89ec0832b180b2ca9c75e0f07acf0116b8fc6228fd8f98e52e67d1f0f80b"
     },
     {
       "path": "docs/recordings/full-contest.cast",
-      "sha256": "sha256:5b497d540c050227f700509862f8345c0e90fdae0300f5129e2e9cc58d718d38"
+      "sha256": "sha256:3878b6619114745bc381dbebbf5a0859b1f89a03a19e241600ea70d7d2d6a817"
     },
     {
       "path": "docs/recordings/hierarchy-drill-down.cast",
-      "sha256": "sha256:c9e69dce6ac38a517e158b63833d9f6c3d5b1a05b66ea075aeba970a7f07fb2b"
+      "sha256": "sha256:4c8104d2ee588ac175e6ba8f5f3a28aa4571b0ff4c9a9a2b0dd62cc4f3cb5054"
     },
     {
       "path": "docs/recordings/more-evidence.cast",
-      "sha256": "sha256:4fd919b8f20eff29b00fa68e71ceb52b1187e6e35ec8937de911ecccf945c122"
+      "sha256": "sha256:d889d465e186e2a87e23a9e9a9c1dd278853d16c59f44cd6dd46d706e651f776"
     },
     {
       "path": "docs/recordings/multi-point-handoff.cast",
-      "sha256": "sha256:b03ecaf69caf43ed09cec03ba4d742b1a66417a9719962676bbbdd31dbff73b3"
+      "sha256": "sha256:388db6b39999508243343d1d8bbce36ca70419663103e0215cde5c9fe91e538b"
     },
     {
       "path": "docs/recordings/navigate-documents.cast",
-      "sha256": "sha256:e4a59dba7b71e37b255068caa5ddbf75de1de0c0acf1eb3952e78b75ef5aad92"
+      "sha256": "sha256:0646d8c485731cd9acabda5a9dae3c4181857bdc0d7b249ad913a020f2630141"
     },
     {
       "path": "docs/recordings/pause-resume-session.cast",
-      "sha256": "sha256:4e9eeb151ed7e13eccf62dec492fa6c7e50241f8209310481fa8da12b8f1d7be"
+      "sha256": "sha256:4adc2972b584992e314e276f386155867515f4b0b4a8eab08b28dba2204e43b6"
     },
     {
       "path": "docs/recordings/proposal-reject.cast",
-      "sha256": "sha256:516fa204bb60f1b8348fe5882ad81ccba84f55a6b73c97825abdd371d7052ef9"
+      "sha256": "sha256:4699239ce517fed39bb91bb5f54bd5c45b92c7793165d1aebd5129f7a3774d8e"
     },
     {
       "path": "docs/recordings/proposal-with-navigation.cast",
-      "sha256": "sha256:b508537512ca84b29ab97a8e28631e3a54d24fcf91fe32c1a9c3240ea31ef394"
+      "sha256": "sha256:2c0e42682fa6daac37f9cd219927d78921e4dbc454c7f105d822629be7c82f28"
     },
     {
       "path": "docs/recordings/reask-after-gap.cast",
-      "sha256": "sha256:39e271835f826c1e70dacc72004479b77ea3aa025879d47945f92ddc55569930"
+      "sha256": "sha256:9953d02e61d5e40b785fa6260f2c788c2e7f42105d951a54144b36aa9854421b"
     },
     {
       "path": "docs/recordings/reject-risk.cast",
-      "sha256": "sha256:cc85359715f3ad9f3e6227d2cb23f1dc29b163162e282f6fd377dba461d43615"
+      "sha256": "sha256:e75e1c1870c6cc149f0cc68d76db9eaf4e92be05ed809e8e4fc21bbdd28a452a"
     },
     {
       "path": "docs/recordings/reopen-save.cast",
-      "sha256": "sha256:97684ffbe3b95f54d9d853978fc4943ec12aa60bc263baf5b726ae2818e6b53f"
+      "sha256": "sha256:8a24cfe3e479aa2399e71a05f6e16e0dd08c6f0a3bdc1e4d7f17f3a9ff4489ea"
     },
     {
       "path": "docs/recordings/revise-selection.cast",
-      "sha256": "sha256:d4fad815ec29bebd67048f436ed074d8d7b56ef57fa38f0ca7dc5ef350297624"
+      "sha256": "sha256:f111ced92ed72fa479e6175e9464b88b758fd4c4114dda80c209a13455a423c7"
     },
     {
       "path": "docs/recordings/revision-reopen.cast",
-      "sha256": "sha256:59ba8fc1d23383622412baf24037ffd014a99779eca9d3308a82e7fb6ead60da"
+      "sha256": "sha256:e01bfb3bd2307148f8c77b46e29e73bfebdf9d04ebb02dead816ff911c277fe7"
     },
     {
       "path": "docs/recordings/rollback-conflict-display.cast",
-      "sha256": "sha256:79b31d7828b3332f6b0dfc322275101c2a3a843501893ad796a4ba951e854eb4"
+      "sha256": "sha256:4c6abd3664a3a9d58ae28c13a20ce45d645ed8fbc7d5ffdf92e96043a6ada11f"
     },
     {
       "path": "docs/recordings/safe-exit.cast",
-      "sha256": "sha256:ec4ce0898cb56bf7c85098e0878c64323da22302c498b8439b61eb2b75c18c0d"
+      "sha256": "sha256:230f8c0133e29442a7d789327de6dc5aa7ee1ea0a02e47734deb257bea400adc"
     },
     {
       "path": "docs/recordings/targeted-reopen.cast",
-      "sha256": "sha256:0b02660e1eba125f9fa375ae4deacc04cbc42d9671e7fbf1510b28d94449061c"
+      "sha256": "sha256:597459f69bd89fff9b69312083c0f804c64fa16729a20ed24600218945779484"
     },
     {
       "path": "docs/recordings/transport-roundtrip.cast",
-      "sha256": "sha256:6bfa7d5d58d35286f873e103bc234285379e96ed264bc906666b76f154df5dc7"
+      "sha256": "sha256:23dc4e4a03aec5757447e627061ab88a8b1e4c2802d139164a4335895e9a0af0"
     },
     {
       "path": "docs/screenshots/add-alternative.svg",
@@ -373,6 +373,10 @@
         "sha256": "sha256:39dd364994c035d72f97d8b8a0aac49c26b2403e4d02714983633a009dbf7025"
       },
       {
+        "path": "src/awtui/audit.py",
+        "sha256": "sha256:1925ed56eed4eacdfdc73de3b190b14349a37d71ac9fe33b263e5faa82afd582"
+      },
+      {
         "path": "src/awtui/awg.py",
         "sha256": "sha256:95cf354512b5a22167ba6913b48b6c13759ba3857f75f85d16b3a869dcc3050e"
       },
@@ -410,7 +414,7 @@
       },
       {
         "path": "src/awtui/gui.py",
-        "sha256": "sha256:20a38e908ac7ba9ee66b898ad2d48085f63166b6211161abbd79f1d053e5c9a4"
+        "sha256": "sha256:8fef7babdafddd58207318702ad5e43ff928c619447a797de5917dc90c8e17c7"
       },
       {
         "path": "src/awtui/host.py",
@@ -422,11 +426,11 @@
       },
       {
         "path": "src/awtui/launcher.py",
-        "sha256": "sha256:f928f2c2e36cec8b45f34fbd9132b528b9618bf63abdb0a59bfa21b8ef964842"
+        "sha256": "sha256:675494110e07bff17d50d4653401ca6b51710e78163ce7c3f209cf4e76f794b4"
       },
       {
         "path": "src/awtui/live.py",
-        "sha256": "sha256:0fd6ec92f77a160d615d06dd23f041c90185d1742efaaa679c1afe022d363b06"
+        "sha256": "sha256:4e10ad16b131c381c4e6ddb0d3f5d98506390bea983ac1a7850c0cd84e3a6b7e"
       },
       {
         "path": "src/awtui/markdown.py",
@@ -489,7 +493,7 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:1a0fa1f2fa451fa063af9a3b9131f5a9a93feef91961fbfb255f2d7e202d5c9a"
+    "version": "sha256:417f0faea8dd8e5d3e7f4f6e9222cb7003aa375dd5e9855bb983a163b46d99f4"
   },
   "schema_version": 1,
   "source_release": {
