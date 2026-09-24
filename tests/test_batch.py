@@ -13,3 +13,13 @@ def test_batch_render_preserves_point_identity_and_partial_answers():
     assert "COUPLING WARNING: p2 depends on p1" in output
     assert "p1: answered" in output
     assert "p2: unresolved" in output
+
+
+def test_batch_render_marks_effective_window_rollback_and_conflict():
+    point = PacketPoint("p3", "doc:p3", "choose", _point("p3").proposals,
+                        "impact", effective_from="r4", effective_until="r7",
+                        rollback_of="p2", conflict_reason="evidence diverged")
+    output = render_batch(DiscussionPacket("AR-21", 4, (point,)))
+    assert "effective r4..r7" in output
+    assert "rollback of p2" in output
+    assert "conflict: evidence diverged" in output
