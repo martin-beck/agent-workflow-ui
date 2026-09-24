@@ -11,3 +11,9 @@ desktop session or user credentials.
 
 The committed gallery is linked from [SCENARIOS.md](SCENARIOS.md); regenerate
 it with `python tools/run_gui_scenarios.py` after changing GUI behavior.
+
+The corpus also includes the post-release flows: `company-dashboard`,
+`hierarchy-drill-down`, `board-directive-entry`, `pause-resume-session`, and
+`rollback-conflict-display`. These use the same batch fixture and capture
+pipeline as proposal decisions, so GUI behavior remains comparable across
+dashboard, directive, resume, and rollback review sessions.

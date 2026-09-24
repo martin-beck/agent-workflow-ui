@@ -38,6 +38,10 @@ _NAVIGATION_KEYS = {
     "design": b"d",
     "page-up": b"\x1b[5~",
     "page-down": b"\x1b[6~",
+    "dashboard": b"b",
+    "drill-down": b"]",
+    "drill-up": b"[",
+    "resume": b"R",
 }
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 # A visible human-paced cadence without making CI regenerate 20 casts for
@@ -140,12 +144,31 @@ def _run_live_replay(scenario: dict) -> tuple[object, list[str], list[str], str]
     from awtui.live import build_application
 
     decisions = demo_decisions(scenario)
+    board_request = None
+    if scenario.get("flow") in {"dashboard", "drill-down"}:
+        board_request = {
+            "schema_version": "1.0", "kind": "coordinator-board-request",
+            **scenario["context"], "rollup_revision": 3,
+            "pages": [{"page_id": "overview", "title": "Overview", "status": "active", "completed": 3, "total": 5},
+                       {"page_id": "bottlenecks", "title": "Bottlenecks", "status": "watch", "blocked": 1}],
+            "hierarchy": [{"node_id": "company", "title": "Example company", "kind": "company", "level": 0, "status": "active", "total": 5},
+                          {"node_id": "team", "title": "Platform team", "kind": "team", "level": 1, "parent_id": "company", "status": "active", "total": 3},
+                          {"node_id": "task", "title": "Directive integration", "kind": "task", "level": 2, "parent_id": "team", "status": "blocked", "blocked": 1}],
+        }
+    paused_sessions = []
+    if scenario.get("flow") == "pause-resume":
+        paused_sessions = [{"session_id": "paused-demo", **scenario["context"], "session_file": "/state/paused-demo.json", "unresolved": ["p2"]}]
+    if scenario.get("flow") == "rollback":
+        decisions[1]["rollback_of"] = decisions[0]["point_id"]
+        decisions[1]["conflict_reason"] = "new evidence diverged from the earlier choice"
     events: list[str] = []
     app = build_application(
         design_document=f"# Design document\n\nScenario: {scenario['title']}\n\n## Design boundary\nThe design boundary is reviewed before implementation.\n\n## Validation path\nThe validation path records independent evidence.",
         workplan=f"# Workplan\n\nScenario: {scenario['title']}\n\n## Rollout step\nThe rollout step is selected in the batch decision.",
         decisions=decisions,
-        on_event=events.append,
+        on_event=lambda event: events.append(event if isinstance(event, str) else event.get("event_type", "resume")),
+        board_request=board_request,
+        paused_sessions=paused_sessions,
     )
     stream = StringIO()
     with create_pipe_input() as pipe:

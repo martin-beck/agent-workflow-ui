@@ -279,8 +279,66 @@
       "recording": "docs/recordings/proposal-with-navigation.cast",
       "screenshot": "docs/screenshots/proposal-with-navigation.svg",
       "title": "Add and revise a proposal after document review"
+    },
+    {
+      "decision_count": 3,
+      "events": [
+        "dashboard"
+      ],
+      "gui_screenshot": "docs/gui-screenshots/company-dashboard.png",
+      "id": "company-dashboard",
+      "recording": "docs/recordings/company-dashboard.cast",
+      "screenshot": "docs/screenshots/company-dashboard.svg",
+      "title": "Review company dashboard rollup"
+    },
+    {
+      "decision_count": 3,
+      "events": [
+        "dashboard",
+        "board-drill-down",
+        "board-drill-down",
+        "board-drill-up"
+      ],
+      "gui_screenshot": "docs/gui-screenshots/hierarchy-drill-down.png",
+      "id": "hierarchy-drill-down",
+      "recording": "docs/recordings/hierarchy-drill-down.cast",
+      "screenshot": "docs/screenshots/hierarchy-drill-down.svg",
+      "title": "Drill from company to task"
+    },
+    {
+      "decision_count": 3,
+      "events": [
+        "select"
+      ],
+      "gui_screenshot": "docs/gui-screenshots/board-directive-entry.png",
+      "id": "board-directive-entry",
+      "recording": "docs/recordings/board-directive-entry.cast",
+      "screenshot": "docs/screenshots/board-directive-entry.svg",
+      "title": "Enter a board instruction"
+    },
+    {
+      "decision_count": 3,
+      "events": [
+        "resume"
+      ],
+      "gui_screenshot": "docs/gui-screenshots/pause-resume-session.png",
+      "id": "pause-resume-session",
+      "recording": "docs/recordings/pause-resume-session.cast",
+      "screenshot": "docs/screenshots/pause-resume-session.svg",
+      "title": "Resume a paused decision session"
+    },
+    {
+      "decision_count": 3,
+      "events": [
+        "select"
+      ],
+      "gui_screenshot": "docs/gui-screenshots/rollback-conflict-display.png",
+      "id": "rollback-conflict-display",
+      "recording": "docs/recordings/rollback-conflict-display.cast",
+      "screenshot": "docs/screenshots/rollback-conflict-display.svg",
+      "title": "Inspect rollback and conflict state"
     }
   ],
-  "scenario_count": 24,
+  "scenario_count": 29,
   "schema_version": 1
 }
