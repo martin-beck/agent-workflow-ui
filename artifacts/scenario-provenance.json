@@ -390,7 +390,7 @@
       },
       {
         "path": "src/awtui/connect.py",
-        "sha256": "sha256:08d5e501ab58bfddce27ba6271d7b11a9935e08db6e88dc95d7146d12be5f797"
+        "sha256": "sha256:6b5ae659df8d89e97df5f2f34aa9b2892d7c82a19625ea1cc0c3c58ac080bf8e"
       },
       {
         "path": "src/awtui/coordinator.py",
@@ -489,7 +489,7 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:f50bfac6b7b3a26b331635224b8d2d27e39812a84b5ac35b3c6f2b26f8c52a7d"
+    "version": "sha256:4034cf5c19afdeb0d23e2a05adf3d6c6c6f50e6764259f5229a6496f001cf799"
   },
   "schema_version": 1,
   "source_release": {
