@@ -46,3 +46,10 @@ the returned token until both files are durable. The journal and request are
 also mode `0600`; the registry stores only the token digest. A transport or
 write failure leaves no usable user command and a later retry can safely
 publish the batch again.
+
+Directive sessions use the same token and request envelope. Their interaction
+object sets `mode: "directive"`; the TUI emits exactly one `directive` event
+whose payload contains a non-empty `request_id` and `directive` string. The
+event remains bound to the project, AR revision, packet digest, session, and
+sequence, and an expired token is rejected before the directive can be
+submitted.

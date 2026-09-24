@@ -639,6 +639,56 @@ def build_application_from_context(context: dict, *, decisions=None, on_event=No
     return application
 
 
+def build_directive_application(context: dict, *, directive: str = "", on_event=None,
+                                record_event=None) -> Application:
+    """Build the revision-bound board-instruction entry view.
+
+    Directives are intentionally separate from proposal selection: the user
+    enters free-form board intent, then explicitly submits it as one
+    ``directive`` event carrying the same session boundary and sequence
+    guarantees as a decision event.
+    """
+    transport = LiveSessionTransport(context, record_event) if record_event is not None else None
+    editor = TextArea(text=directive, multiline=True, scrollbar=True, wrap_lines=True)
+    status = TextArea(text="Enter a board instruction. Ctrl-S submits; Escape cancels.", read_only=True, height=3)
+    footer = TextArea(text="Ctrl-S: submit directive   Enter: new line   Escape: cancel", read_only=True, height=1, style="class:footer")
+    bindings = KeyBindings()
+
+    def submit(event):
+        value = editor.text.strip()
+        if not value:
+            status.text = "Directive is required before submission."
+            return
+        kwargs = {"request_id": context.get("request_id", context.get("decision_request_ref", "")), "directive": value}
+        acknowledgement = transport.submit("directive", **kwargs) if transport is not None else None
+        if acknowledgement is not None and not acknowledgement.accepted:
+            status.text = f"Directive not accepted: {acknowledgement.reason}"
+            return
+        if on_event is not None:
+            on_event("directive")
+        event.app.exit(result=0)
+
+    @bindings.add("c-s")
+    def submit_directive(event):
+        submit(event)
+
+    @bindings.add("escape")
+    def cancel(event):
+        event.app.exit(result=130)
+
+    application = Application(
+        layout=Layout(HSplit([
+            Frame(editor, title="Board instruction", height=Dimension(weight=1)),
+            Frame(status, title="Contract", height=Dimension(min=3, max=3)), footer,
+        ])),
+        key_bindings=bindings, full_screen=True, erase_when_done=True,
+        style=Style.from_dict({"frame.border": "ansiblue", "frame.label": "bold ansicyan", "footer": "bg:#202530 #d7f9ff"}),
+    )
+    application.directive_editor = editor
+    application.directive_status = status
+    return application
+
+
 def build_application_from_awg_request(request: dict, *, project_id: str, session_id: str, documents: dict[str, str] | None = None, on_event=None, record_event=None) -> Application:
     """Build the live TUI directly from Guidance's decision-request schema."""
     from .awg import envelope_requests_to_tui, request_to_tui
@@ -717,7 +767,7 @@ def main(argv: list[str] | None = None) -> int:
             request = attach_session(args.session_file)
         if request.get("kind") != "coordinator-tui-request":
             parser.error("input is not a coordinator-tui-request")
-        guidance = request["guidance_request"]
+        interaction = request.get("interaction") if isinstance(request.get("interaction"), dict) else {}
         documents = request.get("documents")
         event_log = args.session_file.with_suffix(".events.jsonl") if args.session_file else None
 
@@ -727,13 +777,23 @@ def main(argv: list[str] | None = None) -> int:
             if event_log is not None:
                 append_event(event_log, event)
 
-        application = build_application_from_awg_request(
+        if interaction.get("mode") == "directive" or request.get("directive") is not None:
+            context = {
+                "project_id": request["project_id"], "ar_id": request["ar"]["ar_id"],
+                "task_revision": request["ar"]["task_revision"], "packet_digest": request["packet_digest"],
+                "session_id": request["session_id"], "request_id": interaction.get("decision_request_ref", request.get("request_id", "")),
+                "contract_versions": request.get("contract_versions", {"tui": "1"}),
+            }
+            application = build_directive_application(context, directive=request.get("directive", ""), record_event=record_event)
+        else:
+            guidance = request["guidance_request"]
+            application = build_application_from_awg_request(
             guidance,
             project_id=request["project_id"],
             session_id=request["session_id"],
             documents=documents if isinstance(documents, dict) else None,
             record_event=record_event,
-        )
+            )
         return run_application(application)
     return run_application(build_application(
         design_document="# Design document\n\nDefine the service boundary and validation strategy.",
