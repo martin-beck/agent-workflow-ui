@@ -49,7 +49,7 @@ def apply_tui_response(ar: dict[str, Any], event: dict[str, Any], *, response_ev
     never marks implementation complete; it records only human disposition,
     selected proposal, and the resulting description/specification text.
     """
-    if event.get("event_type") not in {"directive", "select", "add-proposal", "clarify", "reject", "request-more-evidence", "reopen", "reconciled"}:
+    if event.get("event_type") not in {"directive", "select", "add-proposal", "clarify", "reject", "request-more-evidence", "save", "reopen", "reconciled"}:
         raise ValueError("event is not a decision response")
     payload = event.get("payload") or {}
     if event.get("event_type") == "directive" and (not isinstance(payload.get("directive"), str) or not payload["directive"].strip()):
@@ -57,6 +57,11 @@ def apply_tui_response(ar: dict[str, Any], event: dict[str, Any], *, response_ev
     updated = dict(ar)
     bridge = dict(ar.get("interaction", {}))
     disposition = payload.get("disposition", event["event_type"])
+    if event.get("event_type") == "save":
+        snapshot = payload.get("snapshot")
+        if not isinstance(snapshot, dict) or payload.get("snapshot_digest", "").split(":", 1)[0] != "sha256":
+            raise ValueError("save response requires a revision-bound snapshot")
+        updated["decision_session"] = {"snapshot": snapshot, "snapshot_digest": payload["snapshot_digest"], "exit": bool(payload.get("exit", False))}
     resolved = disposition in {"directive", "select", "selected", "reconciled"}
     bridge.update({"schema_version": BRIDGE_VERSION, "decision_status": "resolved" if resolved else "pending", "interaction_required": not resolved, "last_response_event": response_event_ref})
     updated["interaction"] = bridge
