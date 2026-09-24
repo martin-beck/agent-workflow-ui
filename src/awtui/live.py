@@ -20,6 +20,7 @@ from .actions import footer_text, help_text
 from .dashboard import BoardRequest, HierarchyNavigator, render_dashboard
 from .journal import render_paused_cards, resume_event
 from .persistence import DurableSessionPersistence
+from .audit import AuditControl
 from .anchors import resolve_occurrence
 
 RECORDED_CONTROLS = {"\n": "select", "\r": "select", "r": "reject", "c": "clarify", "m": "request-more-evidence", "a": "add-proposal", "s": "safe-exit", "o": "reopen"}
@@ -97,7 +98,8 @@ def dispatch_recorded_input(keys: str, on_event) -> list[str]:
 
 class LiveInteraction:
     """Mutable view-model for point/proposal selection and batch responses."""
-    def __init__(self, packet: DiscussionPacket, *, paused_sessions: list[dict] | None = None):
+    def __init__(self, packet: DiscussionPacket, *, paused_sessions: list[dict] | None = None,
+                 audit: AuditControl | None = None):
         self.packet, self.point_index, self.proposal_index = packet, 0, 0
         self.filter_query = ""
         self.filter_group = ""
@@ -112,6 +114,7 @@ class LiveInteraction:
         self.help_visible = False
         self.paused_sessions = list(paused_sessions or [])
         self.paused_session_index = 0
+        self.audit = audit
     @property
     def point(self): return self.packet.points[self.point_index]
     @property
@@ -177,6 +180,9 @@ class LiveInteraction:
         response = DecisionResponse(self.point.point_id, disposition, self.proposal.label if disposition == "select" else None, user, user is not None)
         self.responses[self.point.point_id] = response
         self.saved = False
+        if self.audit is not None:
+            self.audit.record(disposition, detail=f"point {self.point.point_id}",
+                              payload={"point_id": self.point.point_id, "disposition": disposition})
         self._refresh_callback()
         return response
     def render_points(self) -> str:
@@ -318,10 +324,10 @@ def run_application(application, *, output_fn=print) -> int:
         return 1
 
 
-def build_application(*, document: str = "Awaiting AR context", points: str = "No discussion points", helper: str = "Select a point for implications and evidence", on_event=None, packet: DiscussionPacket | None = None, workplan: str = "Awaiting workplan", design_document: str | None = None, decisions=None, transport: LiveSessionTransport | None = None, paused_sessions: list[dict] | None = None, board_request: dict | BoardRequest | None = None) -> Application:
+def build_application(*, document: str = "Awaiting AR context", points: str = "No discussion points", helper: str = "Select a point for implications and evidence", on_event=None, packet: DiscussionPacket | None = None, workplan: str = "Awaiting workplan", design_document: str | None = None, decisions=None, transport: LiveSessionTransport | None = None, paused_sessions: list[dict] | None = None, board_request: dict | BoardRequest | None = None, audit: AuditControl | None = None) -> Application:
     design_document = design_document if design_document is not None else document
     packet = packet or (_packet_from_decisions(decisions, design_document, workplan) if decisions else None)
-    interaction = LiveInteraction(packet or _default_packet(design_document, points), paused_sessions=paused_sessions)
+    interaction = LiveInteraction(packet or _default_packet(design_document, points), paused_sessions=paused_sessions, audit=audit)
     # TUI callers already receive the legacy safe-exit callback below; durable
     # transport events are emitted through ``transport`` without duplicating
     # them into scenario-facing callbacks.
@@ -383,7 +389,8 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
             rendered += "\nChildren: " + (", ".join(child.title for child in hierarchy.children) or "none")
         return rendered
     dashboard_view = TextArea(text=dashboard_text(), read_only=True, scrollbar=True)
-    footer = TextArea(text="↑/↓: decision  ←/→: proposal  g: group  u: unresolved-only  x: clear filter  tab/w/d: workplan/design  b: dashboard  [/]: hierarchy up/down  " + footer_text() + "  |  ?: help", read_only=True, height=1, style="class:footer")
+    audit_view = TextArea(text=audit.render() if audit else "Audit / privacy control\nNo audit context supplied.", read_only=True, scrollbar=True)
+    footer = TextArea(text="↑/↓: decision  ←/→: proposal  g: group  u: unresolved-only  x: clear filter  tab/w/d: workplan/design  b: dashboard  v: audit  [/]: hierarchy up/down  " + footer_text() + "  |  ?: help", read_only=True, height=1, style="class:footer")
     help_view = TextArea(text=help_text(), read_only=True, scrollbar=True, focusable=True)
     help_panel = ConditionalContainer(
         Frame(help_view, title="Help / keyboard / focus", style="class:help-pane"),
@@ -414,6 +421,8 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
                 )
         else:
             helper_view.text = interaction.render_helper() if packet else helper
+        if audit is not None:
+            audit_view.text = audit.render()
         if interaction.exit_confirm:
             requirements = interaction.exit_requirements()
             complete_unsaved = not interaction.exit_requirements()[:-1] and not interaction.saved
@@ -651,6 +660,11 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
         if not interaction.input_mode and board is not None:
             event.app.layout.focus(dashboard_view)
             if on_event is not None: on_event("dashboard")
+    @bindings.add("v")
+    def audit_key(event):
+        if not interaction.input_mode and audit is not None:
+            event.app.layout.focus(audit_view)
+            if on_event is not None: on_event("audit")
     @bindings.add("]")
     def hierarchy_down(event):
         if hierarchy is not None and not interaction.input_mode:
@@ -795,8 +809,9 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     responsive_documents.width = Dimension(weight=1)
     responsive_documents.height = document_row_height
     responsive_documents.children = horizontal_documents.children
+    audit_frame = Frame(audit_view, title="Audit / privacy control", style="class:dashboard-pane", height=Dimension(min=4, max=16, preferred=6))
     body = HSplit(
-        [help_panel, responsive_documents, helper_frame, dashboard_frame, editor_form, confirmation, footer],
+        [help_panel, responsive_documents, helper_frame, dashboard_frame, audit_frame, editor_form, confirmation, footer],
         width=Dimension(weight=1),
         height=Dimension(weight=1),
     )
@@ -822,6 +837,7 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     application.awtui_hierarchy = hierarchy
     application.awtui_footer = footer
     application.awtui_help = help_view
+    application.awtui_audit = audit_view
     application.awtui_layout_dimensions = {
         "document_row": document_row_height,
         "pane_width": pane_width,
@@ -845,6 +861,10 @@ def build_application_from_context(context: dict, *, decisions=None, on_event=No
     """Build the live UI from a Coordinator/AWG context, always rendering Markdown documents."""
     documents = context.get("documents", {})
     transport = LiveSessionTransport(context, record_event) if record_event is not None else None
+    audit = None
+    if context.get("audit", True) and {"project_id", "packet_digest", "session_id"}.issubset(context):
+        from .audit import audit_from_context
+        audit = audit_from_context(context)
     application = build_application(
         design_document=documents.get("design", "# Design document\n\nNo design document supplied."),
         workplan=documents.get("workplan", "# Workplan\n\nNo workplan supplied."),
@@ -853,6 +873,7 @@ def build_application_from_context(context: dict, *, decisions=None, on_event=No
         transport=transport,
         paused_sessions=context.get("paused_sessions", []),
         board_request=context.get("board"),
+        audit=audit,
     )
     application.interaction.request_id = context.get("request_id")
     application.interaction.candidate_ids = {

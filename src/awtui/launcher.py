@@ -83,6 +83,7 @@ def main() -> int:
             workplan=(request.get("documents") or {}).get("workplan", "# Work plan\n\nAwaiting context"),
             decisions=decisions,
             on_event=record_event,
+            context=request,
         )
         return window.run()
     from .gui import main as gui_main
