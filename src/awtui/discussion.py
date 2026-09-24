@@ -28,6 +28,9 @@ class PacketPoint:
     # the design and work-plan panes.  Older packets continue to use
     # ``highlight`` as their fallback target.
     document_highlights: dict[str, str] = field(default_factory=dict)
+    # Stable occurrence-aware ranges.  Each entry is a list because one
+    # decision may refer to several source fragments in the same document.
+    highlight_ranges: dict[str, tuple[dict[str, object], ...]] = field(default_factory=dict)
     # Coordinator checkpoint metadata.  These fields are optional so packets
     # from older bridge versions remain renderable.
     effective_from: str = ""

@@ -11,6 +11,7 @@ from typing import Any
 
 from .discussion import Proposal
 from .live import LiveInteraction, _default_packet, _packet_from_decisions
+from .anchors import resolve_occurrence
 from .actions import help_text
 from .persistence import DurableSessionPersistence
 
@@ -262,16 +263,29 @@ class DecisionWindow:
     def _refresh_helper(self) -> None:
         self.helper.setPlainText(self.interaction.render_helper())
 
-    def _highlight_document(self, widget: Any, phrase: str) -> None:
-        cursor = widget.document().find(phrase)
+    def _highlight_document(self, widget: Any, phrase: str, occurrence: int = 0,
+                            ranges: tuple[dict[str, object], ...] = ()) -> None:
+        # QTextDocument.find() without a cursor always starts at the beginning.
+        # Resolve the same occurrence-aware range used by the TUI instead.
+        text = widget.toPlainText()
         selections = []
-        if not cursor.isNull():
+        targets = ranges or ({"text": phrase, "occurrence": occurrence},)
+        first_cursor = None
+        for target in targets:
+            target_phrase = str(target.get("text", phrase))
+            match = resolve_occurrence(text, target_phrase, int(target.get("occurrence", 0)))
+            if match is None: continue
+            cursor = self.QtGui.QTextCursor(widget.document())
+            cursor.setPosition(match.start)
+            cursor.setPosition(match.end, self.QtGui.QTextCursor.MoveMode.KeepAnchor)
             selection = self.QtWidgets.QTextEdit.ExtraSelection()
             selection.cursor = cursor
             selection.format.setBackground(self.QtGui.QColor("#d6a84f"))
             selection.format.setForeground(self.QtGui.QColor("#111722"))
             selections.append(selection)
-            widget.setTextCursor(cursor)
+            if first_cursor is None: first_cursor = cursor
+        if first_cursor is not None:
+            widget.setTextCursor(first_cursor)
             widget.ensureCursorVisible()
         widget.setExtraSelections(selections)
 
@@ -294,8 +308,11 @@ class DecisionWindow:
         workplan_document = self.interaction.packet_document("workplan") if hasattr(self.interaction, "packet_document") else ""
         self.design.setMarkdown(design_document)
         self.workplan.setMarkdown(workplan_document)
-        self._highlight_document(self.design, self.interaction.point.document_highlights.get("design", self.interaction.point.highlight or self.interaction.point.question))
-        self._highlight_document(self.workplan, self.interaction.point.document_highlights.get("workplan", self.interaction.point.highlight or self.interaction.point.question))
+        for mode, widget in (("design", self.design), ("workplan", self.workplan)):
+            phrase = self.interaction.point.document_highlights.get(mode, self.interaction.point.highlight or self.interaction.point.question)
+            ranges = self.interaction.point.highlight_ranges.get(mode, ())
+            occurrence = int(ranges[0].get("occurrence", 0)) if ranges else 0
+            self._highlight_document(widget, phrase, occurrence, ranges)
         summary = self.interaction.packet.summary(self.interaction.responses)
         self.status.setText(f"Decision {self.interaction.point_index + 1}/{len(self.interaction.packet.points)}  |  {'saved' if self.interaction.saved else 'unsaved'}  |  answered {summary['answered']}/{summary['total']}  |  unresolved {summary['unresolved']}  |  blocked {summary['blocked']}")
         self._refresh_helper()
