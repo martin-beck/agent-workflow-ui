@@ -39,7 +39,8 @@ def generate(root: Path = ROOT) -> str:
         if recording.parts[:2] != ("docs", "recordings") or recording.suffix != ".cast":
             raise ValueError(f"{scenario['id']}: recording must be under docs/recordings")
         recording_link = recording.relative_to("docs").as_posix()
-        lines.extend([f"## {scenario['title']}", "", f"- **Scenario ID:** `{scenario['id']}`", f"- **AR context:** `{scenario['context']['ar_id']}` revision `{scenario['context']['task_revision']}`", f"- **Input actions:** `{', '.join(scenario['actions'])}`", f"- **Emitted events:** `{', '.join(result['events']) or 'none'}`", f"- **Screenshot:** [open terminal capture]({screenshot_link})", f"- **GUI capture:** [open GUI screenshot]({gui_link})", f"- **Live recording:** [play asciinema recording]({recording_link})", "", "This synthetic workflow is privacy-safe and contains no real prompts, credentials, host paths, or transcripts.", ""])
+        feature = scenario.get("flow", "decision")
+        lines.extend([f"## {scenario['title']}", "", f"- **Scenario ID:** `{scenario['id']}`", f"- **Flow:** `{feature}`", f"- **AR context:** `{scenario['context']['ar_id']}` revision `{scenario['context']['task_revision']}`", f"- **Input actions:** `{', '.join(scenario['actions'])}`", f"- **Emitted events:** `{', '.join(result['events']) or 'none'}`", f"- **Screenshot:** [open terminal capture]({screenshot_link})", f"- **GUI capture:** [open GUI screenshot]({gui_link})", f"- **Live recording:** [play asciinema recording]({recording_link})", "", "This synthetic workflow is privacy-safe and contains no real prompts, credentials, host paths, or transcripts.", ""])
     output = "\n".join(lines)
     (root / "docs/SCENARIOS.md").write_text(output, encoding="utf-8")
     return output

@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 from awtui.live import RECORDED_CONTROLS, dispatch_recorded_input
 
-ALLOWED = {"enter", "r", "c", "m", "a", "s", "o", "q", "escape", "up", "down", "left", "right", "tab", "workplan", "design", "page-up", "page-down"}
+ALLOWED = {"enter", "r", "c", "m", "a", "s", "o", "q", "escape", "up", "down", "left", "right", "tab", "workplan", "design", "page-up", "page-down", "dashboard", "drill-down", "drill-up", "directive", "pause", "resume"}
 HEX_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
@@ -45,7 +45,12 @@ def validate(path: Path) -> list[str]:
             errors.append(f"{item.get('id')} action trace is unbounded")
         # Navigation actions are exercised by the live replay; only controls
         # emit lifecycle events in this compact event-trace projection.
-        replayed = dispatch_recorded_input("".join("\n" if a == "enter" else "\x1b" if a == "escape" else a for a in item.get("actions", []) if a not in {"up", "down", "left", "right", "tab", "workplan", "design", "page-up", "page-down"}), lambda _event: None)
+        replayed = dispatch_recorded_input("".join("\n" if a == "enter" else "\x1b" if a == "escape" else a for a in item.get("actions", []) if a not in {"up", "down", "left", "right", "tab", "workplan", "design", "page-up", "page-down", "dashboard", "drill-down", "drill-up", "resume"}), lambda _event: None)
+        replayed.extend({"dashboard": "dashboard", "drill-down": "board-drill-down", "drill-up": "board-drill-up", "resume": "resume"}[action] for action in item.get("actions", []) if action in {"dashboard", "drill-down", "drill-up", "resume"})
+        # Board actions are emitted in input order; preserve the order when a
+        # scenario combines ordinary controls with hierarchy navigation.
+        if item.get("flow") in {"dashboard", "drill-down", "pause-resume"}:
+            replayed = ["dashboard" if action == "dashboard" else "board-drill-down" if action == "drill-down" else "board-drill-up" if action == "drill-up" else "resume" if action == "resume" else event for action, event in zip(item.get("actions", []), replayed)]
         if replayed != item.get("expected_events", []):
             errors.append(f"{item.get('id')} expected_events do not match live control replay")
     return errors
