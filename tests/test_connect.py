@@ -4,7 +4,7 @@ import stat
 import tarfile
 
 import pytest
-from awtui.connect import environment_fingerprint, bootstrap_runtime, runtime_archive_name, runtime_manifest, _validate_remote_path
+from awtui.connect import environment_fingerprint, bootstrap_runtime, runtime_archive_name, runtime_manifest, _validate_remote_path, _validate_ssh_host
 from awtui.connect import connect
 
 
@@ -33,6 +33,61 @@ def test_runtime_archive_is_platform_specific_and_safely_extracted(tmp_path):
 def test_remote_paths_fail_closed(path):
     with pytest.raises(ValueError):
         _validate_remote_path(path)
+
+
+@pytest.mark.parametrize("host", ["bad;host", "bad host", "bad\nhost", "bad'host"])
+def test_ssh_aliases_fail_closed(host):
+    with pytest.raises(ValueError, match="ssh_host"):
+        _validate_ssh_host(host)
+
+
+def test_ssh_alias_is_preserved_for_open_ssh_config():
+    assert _validate_ssh_host("project-prod") == "project-prod"
+
+
+def test_remote_result_is_published_by_atomic_rename_and_cleanup(monkeypatch):
+    import json
+    import subprocess
+    import awtui.connect as connector
+
+    commands = []
+    request = {"project_id": "p", "session_id": "s", "ar": {"ar_id": "AR-1", "task_revision": 2}}
+
+    def transport(command, **kwargs):
+        del kwargs
+        commands.append(command)
+        if command[0] == "ssh" and command[2] == "cat":
+            kwargs = {}  # keep the branch visibly side-effect free
+            stdout = transport.stdout
+            stdout.write(json.dumps(request).encode())
+        return subprocess.CompletedProcess(command, 0)
+
+    transport.stdout = None
+    original = connector.subprocess.run
+
+    def run(command, **kwargs):
+        if command[0] == "ssh" and command[2] == "cat":
+            transport.stdout = kwargs["stdout"]
+        result = transport(command, **kwargs)
+        transport.stdout = None
+        return result
+
+    def ui(command, *, env=None):
+        del env
+        output = connector.Path(command[command.index("--output-json") + 1])
+        output.write_text(json.dumps({"session_id": "s", "sequence": 1}) + "\n", encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(connector.subprocess, "run", run)
+    monkeypatch.setattr(connector, "_run", ui)
+    try:
+        assert connect(session_file="/srv/request.json", ssh_host="project-prod", remote_event_file="/srv/result.json", backend="tui") == 0
+    finally:
+        monkeypatch.setattr(connector.subprocess, "run", original)
+    scp = next(command for command in commands if command[0] == "scp")
+    assert ".tmp-" in scp[-1]
+    assert any(command[:4] == ["ssh", "project-prod", "mv", "-f"] for command in commands)
+    assert any(command[:4] == ["ssh", "project-prod", "rm", "-f"] for command in commands)
 
 
 @pytest.mark.parametrize(

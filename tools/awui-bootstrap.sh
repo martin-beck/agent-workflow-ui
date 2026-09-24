@@ -15,6 +15,7 @@ fi
 : "${AWUI_REMOTE_EVENT_FILE:?set AWUI_REMOTE_EVENT_FILE}"
 AWUI_BACKEND="${AWUI_BACKEND:-}"
 AWUI_RELEASE="${AWUI_RELEASE:-v0.6.0}"
+AWUI_RUNTIME_ARCHIVE="${AWUI_RUNTIME_ARCHIVE:-}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 ARCHITECTURE="$(uname -m 2>/dev/null || printf unknown)"
 KERNEL="$(uname -s 2>/dev/null || printf unknown)"
@@ -34,8 +35,11 @@ if ! "$VENV_PYTHON" -m pip install --quiet "agent-workflow-ui[gui] @ https://git
   AWUI_BACKEND=tui
   "$VENV_PYTHON" -m pip install --quiet "agent-workflow-ui @ https://github.com/martin-beck/agent-workflow-ui/archive/refs/tags/${AWUI_RELEASE}.zip"
 fi
-exec "$VENV_PYTHON" -m awtui.connect \
+set -- \
   --ssh-host "$AWUI_SSH_HOST" \
   --session-file "$AWUI_SESSION_FILE" \
   --remote-event-file "$AWUI_REMOTE_EVENT_FILE" \
   --backend "$AWUI_BACKEND"
+[ -n "$AWUI_RUNTIME_ARCHIVE" ] && set -- "$@" --runtime-archive "$AWUI_RUNTIME_ARCHIVE"
+[ "${AWUI_RESUME:-0}" = 1 ] && set -- "$@" --resume
+exec "$VENV_PYTHON" -m awtui.connect "$@"
