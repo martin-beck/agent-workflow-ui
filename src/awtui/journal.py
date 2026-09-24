@@ -7,6 +7,42 @@ from pathlib import Path
 from typing import Any
 
 
+def _paused_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Validate the public, non-secret fields used by a paused-session card."""
+    required = {"session_id", "project_id", "ar_id", "task_revision", "packet_digest", "session_file", "unresolved"}
+    if not required.issubset(record) or not all(isinstance(record.get(key), str) and record[key] for key in ("session_id", "project_id", "ar_id", "packet_digest", "session_file")):
+        raise ValueError("paused session record is incomplete")
+    if not isinstance(record["task_revision"], int) or record["task_revision"] < 1:
+        raise ValueError("paused session task_revision must be positive")
+    if not isinstance(record["unresolved"], list) or any(not isinstance(item, str) or not item for item in record["unresolved"]):
+        raise ValueError("paused session unresolved points must be strings")
+    return record
+
+
+def render_paused_cards(records: list[dict[str, Any]], *, selected: int = 0) -> str:
+    """Render bounded, privacy-safe cards for sessions awaiting resumption."""
+    if not records:
+        return "Paused sessions\nnone"
+    lines = [f"Paused sessions ({len(records)})"]
+    for index, raw in enumerate(records):
+        record = _paused_record(raw)
+        marker = "▶" if index == selected else " "
+        unresolved = ", ".join(record["unresolved"]) or "none"
+        lines.extend((
+            f"{marker} {record['session_id']}  {record['ar_id']} r{record['task_revision']}",
+            f"    unresolved: {unresolved}",
+            f"    resume: awtui-live --session-file {record['session_file']}",
+        ))
+    return "\n".join(lines)
+
+
+def resume_event(record: dict[str, Any]) -> dict[str, Any]:
+    """Create the host-transport event used to request a paused-session resume."""
+    value = _paused_record(record)
+    return {"event_type": "resume", "session_id": value["session_id"], "task_revision": value["task_revision"],
+            "packet_digest": value["packet_digest"], "payload": {"session_file": value["session_file"], "unresolved": list(value["unresolved"])}}
+
+
 def save(path: Path, session: dict[str, Any]) -> None:
     required = {"project_id", "ar_id", "task_revision", "packet_digest", "responses", "unresolved", "future_requests"}
     if set(session) != required or not isinstance(session["responses"], dict) or not isinstance(session["unresolved"], list) or not isinstance(session["future_requests"], list):
