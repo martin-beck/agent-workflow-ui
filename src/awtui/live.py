@@ -18,6 +18,7 @@ from .markdown import render_markdown
 from .transport import LiveSessionTransport, EventAcknowledgement
 from .dashboard import BoardRequest, HierarchyNavigator, render_dashboard
 from .journal import render_paused_cards, resume_event
+from .persistence import DurableSessionPersistence
 
 RECORDED_CONTROLS = {"\n": "select", "\r": "select", "r": "reject", "c": "clarify", "m": "request-more-evidence", "a": "add-proposal", "s": "safe-exit", "o": "reopen"}
 
@@ -256,6 +257,10 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     design_document = design_document if design_document is not None else document
     packet = packet or (_packet_from_decisions(decisions, design_document, workplan) if decisions else None)
     interaction = LiveInteraction(packet or _default_packet(design_document, points), paused_sessions=paused_sessions)
+    # TUI callers already receive the legacy safe-exit callback below; durable
+    # transport events are emitted through ``transport`` without duplicating
+    # them into scenario-facing callbacks.
+    persistence = DurableSessionPersistence(interaction, transport=transport, on_event=None)
     board = board_request if isinstance(board_request, BoardRequest) else (BoardRequest.from_dict(board_request) if board_request is not None else None)
     hierarchy = HierarchyNavigator(board) if board is not None and board.hierarchy else None
     interaction.proposal_edit_index = 0
@@ -369,7 +374,7 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
         if packet and event_type in {"select", "reject", "clarify"}:
             response = interaction.respond(event_type)
         acknowledgement: EventAcknowledgement | None = None
-        if transport is not None:
+        if transport is not None and event_type != "safe-exit":
             payload = {"point_id": interaction.point.point_id}
             if response is not None:
                 payload.update({"disposition": response.disposition, "selected": response.selected})
@@ -392,7 +397,12 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
                 helper_view.text = f"Event not accepted: {acknowledgement.reason}"
                 return
         if event_type == "safe-exit":
-            interaction.saved = True
+            # Save+Exit is one durable snapshot event.  The legacy callback
+            # still receives ``safe-exit`` for scenario compatibility.
+            acknowledgement = persistence.save(exit=True)
+            if acknowledgement is not None and hasattr(acknowledgement, "accepted") and not acknowledgement.accepted:
+                helper_view.text = f"Save not accepted: {acknowledgement.reason}"
+                return
         refresh()
         if response is not None and response.disposition == "clarify":
             helper_view.text = (
@@ -686,6 +696,12 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     application.editor_fields = tuple(editor_fields)
     application.confirmation_view = confirmation_view
     application.interaction = interaction; application.awtui_state = interaction
+    # Save is intentionally exposed as a renderer-neutral operation for
+    # tests, host adapters, and the Qt renderer.
+    application.awtui_persistence = persistence
+    def save_session(exit: bool = False):
+        return persistence.save(exit=exit)
+    application.awtui_save = save_session
     return application
 
 

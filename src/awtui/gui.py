@@ -11,6 +11,7 @@ from typing import Any
 
 from .discussion import Proposal
 from .live import LiveInteraction, _default_packet, _packet_from_decisions
+from .persistence import DurableSessionPersistence
 
 
 def _qt():
@@ -24,12 +25,13 @@ def _qt():
 class DecisionWindow:
     """Qt window exposing the complete batched decision interaction."""
 
-    def __init__(self, interaction: LiveInteraction, *, title: str = "Agent Workflow", on_event=None) -> None:
+    def __init__(self, interaction: LiveInteraction, *, title: str = "Agent Workflow", on_event=None, transport=None) -> None:
         QtCore, QtGui, QtWidgets = _qt()
         self.QtCore, self.QtGui, self.QtWidgets = QtCore, QtGui, QtWidgets
         self.interaction = interaction
         self._allow_close = False
         self.on_event = on_event
+        self.persistence = DurableSessionPersistence(interaction, transport=transport, on_event=on_event)
         self.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
         self.window = QtWidgets.QMainWindow()
         self.window.setWindowTitle(title)
@@ -133,10 +135,17 @@ class DecisionWindow:
         self.interaction.switch_document(); self._refresh()
 
     def _save(self) -> None:
-        self.interaction.saved = True; self._refresh()
+        result = self.persistence.save()
+        if result is not None and hasattr(result, "accepted") and not result.accepted:
+            self.status.setText(f"Save rejected: {result.reason}")
+            return
+        self._refresh()
 
     def _save_exit(self) -> None:
-        self._save()
+        result = self.persistence.save(exit=True)
+        if result is not None and hasattr(result, "accepted") and not result.accepted:
+            self.status.setText(f"Save rejected: {result.reason}")
+            return
         if self.on_event is not None:
             self.on_event({"event_type": "safe-exit", "point_id": self.interaction.point.point_id})
         self.window.close()
@@ -237,12 +246,12 @@ class DecisionWindow:
         return self.app.exec()
 
 
-def build_gui_application(*, design_document: str = "# Design\n\nAwaiting AR context", workplan: str = "# Work plan\n\nAwaiting AR context", decisions: list[dict[str, Any]] | None = None, on_event=None) -> DecisionWindow:
+def build_gui_application(*, design_document: str = "# Design\n\nAwaiting AR context", workplan: str = "# Work plan\n\nAwaiting AR context", decisions: list[dict[str, Any]] | None = None, on_event=None, transport=None) -> DecisionWindow:
     packet = _packet_from_decisions(decisions, design_document, workplan) if decisions else _default_packet("design", "Review the design")
     interaction = LiveInteraction(packet)
     # Keep source Markdown in the shared view-model for both renderers.
     interaction.packet_document = lambda mode: design_document if mode == "design" else workplan  # type: ignore[attr-defined]
-    return DecisionWindow(interaction, on_event=on_event)
+    return DecisionWindow(interaction, on_event=on_event, transport=transport)
 
 
 def main() -> int:
