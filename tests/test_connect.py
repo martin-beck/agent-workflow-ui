@@ -2,9 +2,10 @@ import json
 import os
 import stat
 import tarfile
+from pathlib import Path
 
 import pytest
-from awtui.connect import environment_fingerprint, bootstrap_runtime, runtime_archive_name, runtime_manifest, _validate_remote_path, _validate_ssh_host
+from awtui.connect import environment_fingerprint, bootstrap_runtime, runtime_archive_name, runtime_manifest, _validate_remote_path, _validate_ssh_host, _timeout_seconds, _transport
 from awtui.connect import connect
 
 
@@ -43,6 +44,71 @@ def test_ssh_aliases_fail_closed(host):
 
 def test_ssh_alias_is_preserved_for_open_ssh_config():
     assert _validate_ssh_host("project-prod") == "project-prod"
+
+
+def test_transport_retries_are_timeout_bounded(monkeypatch):
+    import subprocess
+    import awtui.connect as connector
+
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(kwargs["timeout"])
+        return subprocess.CompletedProcess(command, 1)
+
+    monkeypatch.setattr(connector.subprocess, "run", run)
+    assert _transport(["ssh", "offline", "true"], attempts=3) == 1
+    assert calls == [30.0, 30.0, 30.0]
+
+
+def test_transport_converts_user_cancel_to_controlled_exit(monkeypatch):
+    import awtui.connect as connector
+
+    def cancel(*_args, **_kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(connector.subprocess, "run", cancel)
+    assert _transport(["ssh", "offline", "true"], attempts=3) == 130
+
+
+def test_timeout_setting_is_fail_closed_and_capped(monkeypatch):
+    monkeypatch.setenv("AWUI_CONNECT_TIMEOUT", "999")
+    assert _timeout_seconds() == 300.0
+    monkeypatch.setenv("AWUI_CONNECT_TIMEOUT", "0")
+    with pytest.raises(ValueError):
+        _timeout_seconds()
+
+
+def test_runtime_archive_directory_is_cleaned_after_local_launch(tmp_path, monkeypatch):
+    import awtui.connect as connector
+
+    archive = tmp_path / "runtime.tar.gz"
+    payload = tmp_path / "payload"; payload.mkdir(); (payload / "bin").mkdir()
+    (payload / "bin" / "awtui-live").write_text("#!/bin/sh\n")
+    (payload / "runtime-manifest.json").write_text(__import__("json").dumps(runtime_manifest()))
+    with tarfile.open(archive, "w:gz") as bundle:
+        bundle.add(payload / "bin" / "awtui-live", arcname="bin/awtui-live")
+        bundle.add(payload / "runtime-manifest.json", arcname="runtime-manifest.json")
+
+    seen = []
+    created = []
+
+    class TrackingDirectory:
+        def __init__(self, prefix):
+            import tempfile
+            self.name = tempfile.mkdtemp(prefix=prefix, dir=tmp_path)
+            created.append(self.name)
+        def cleanup(self):
+            import shutil
+            shutil.rmtree(self.name, ignore_errors=True)
+
+    monkeypatch.setenv("AWUI_RUNTIME_ARCHIVE", str(archive))
+    monkeypatch.setattr(connector.shutil, "which", lambda name: None)
+    monkeypatch.setattr(connector.tempfile, "TemporaryDirectory", TrackingDirectory)
+    monkeypatch.setattr(connector, "_run", lambda command, env=None: seen.append(command) or 0)
+    assert connector.connect(session_file=str(tmp_path / "request.json"), backend="tui") == 0
+    assert created and not Path(created[0]).exists()
+    assert seen
 
 
 def test_remote_result_is_published_by_atomic_rename_and_cleanup(monkeypatch):

@@ -11,6 +11,7 @@ import tarfile
 import re
 import hashlib
 import uuid
+from contextlib import suppress
 from pathlib import Path
 
 from .host import detect_ui_backend
@@ -67,8 +68,24 @@ def bootstrap_runtime(archive: str | Path, destination: str | Path, *, expected:
     return target
 
 
+def _timeout_seconds() -> float:
+    """Return a bounded timeout for every external launcher/transport call."""
+    try:
+        value = float(os.environ.get("AWUI_CONNECT_TIMEOUT", "30"))
+    except ValueError as error:
+        raise ValueError("AWUI_CONNECT_TIMEOUT must be a number") from error
+    if value <= 0:
+        raise ValueError("AWUI_CONNECT_TIMEOUT must be positive")
+    return min(value, 300.0)
+
+
 def _run(command: list[str], *, env: dict[str, str] | None = None) -> int:
-    return subprocess.run(command, check=False, env=env).returncode
+    try:
+        return subprocess.run(command, check=False, env=env, timeout=_timeout_seconds()).returncode
+    except subprocess.TimeoutExpired:
+        return 124
+    except KeyboardInterrupt:
+        return 130
 
 
 def _validate_remote_path(value: str) -> str:
@@ -89,7 +106,12 @@ def _validate_ssh_host(value: str) -> str:
 def _transport(command: list[str], *, attempts: int) -> int:
     """Run a transport command with bounded reconnect retries."""
     for attempt in range(attempts):
-        result = subprocess.run(command, check=False)
+        try:
+            result = subprocess.run(command, check=False, timeout=_timeout_seconds())
+        except subprocess.TimeoutExpired:
+            result = subprocess.CompletedProcess(command, 124)
+        except KeyboardInterrupt:
+            result = subprocess.CompletedProcess(command, 130)
         if result.returncode == 0:
             return 0
         if attempt + 1 == attempts:
@@ -110,14 +132,25 @@ def connect(*, session_file: str, ssh_host: str | None = None,
     os.environ["AWUI_BACKEND"] = selected
     executable = "awui-live" if selected == "gui" else "awtui-live"
     runtime_root: Path | None = None
+    runtime_guard: tempfile.TemporaryDirectory[str] | None = None
     runtime_env = os.environ.copy()
+
+    def finish(code: int) -> int:
+        if runtime_guard is not None:
+            runtime_guard.cleanup()
+        return code
     # A reconnect deliberately reuses the same revision-bound request. The
     # launcher can use this marker to restore its paused-session view without
     # changing the request identity or bypassing Coordinator validation.
     if os.environ.get("AWUI_CONNECT_RESUME") == "1":
         runtime_env["AWUI_CONNECT_RESUME"] = "1"
     if not shutil.which(executable) and os.environ.get("AWUI_RUNTIME_ARCHIVE"):
-        runtime_root = bootstrap_runtime(os.environ["AWUI_RUNTIME_ARCHIVE"], tempfile.mkdtemp(prefix="awui-runtime-"))
+        runtime_guard = tempfile.TemporaryDirectory(prefix="awui-runtime-")
+        try:
+            runtime_root = bootstrap_runtime(os.environ["AWUI_RUNTIME_ARCHIVE"], runtime_guard.name)
+        except BaseException:
+            runtime_guard.cleanup()
+            raise
         # The archive is deliberately source-oriented and may not contain a
         # console-script entry point.  Make its package importable for the
         # module fallback while retaining the caller's environment.
@@ -137,7 +170,7 @@ def connect(*, session_file: str, ssh_host: str | None = None,
         executable_argv = [executable]
     output_path = remote_event_file or f"{session_file}.events.jsonl"
     if not ssh_host:
-        return _run([*executable_argv, "--session-file", session_file, "--output-json", output_path], env=runtime_env)
+        return finish(_run([*executable_argv, "--session-file", session_file, "--output-json", output_path], env=runtime_env))
     ssh_host = _validate_ssh_host(ssh_host)
     session_file = _validate_remote_path(session_file)
     remote_result = _validate_remote_path(remote_event_file or f"{session_file}.events.jsonl")
@@ -148,17 +181,30 @@ def connect(*, session_file: str, ssh_host: str | None = None,
     with tempfile.TemporaryDirectory(prefix="awui-connect-") as directory:
         local_request = Path(directory) / "request.json"
         local_result = Path(directory) / "events.json"
-        with local_request.open("wb") as stream:
-            fetched = subprocess.run(["ssh", ssh_host, "cat", "--", session_file], stdout=stream, check=False)
+        fetch_command = ["ssh", ssh_host, "cat", "--", session_file]
+        fetched = subprocess.CompletedProcess(fetch_command, 1)
+        for attempt in range(reconnect_attempts):
+            # Truncate the local packet before every retry so a partial fetch
+            # can never be mistaken for a valid revision-bound request.
+            with local_request.open("wb") as stream:
+                try:
+                    fetched = subprocess.run(fetch_command, stdout=stream, check=False,
+                                             timeout=_timeout_seconds())
+                except subprocess.TimeoutExpired:
+                    fetched = subprocess.CompletedProcess(fetch_command, 124)
+                except KeyboardInterrupt:
+                    fetched = subprocess.CompletedProcess(fetch_command, 130)
+            if fetched.returncode == 0:
+                break
         if fetched.returncode != 0:
-            return fetched.returncode
+            return finish(fetched.returncode)
         # The live launcher rejects group/world-readable session packets;
         # scp/ssh fetches must preserve that privacy boundary locally too.
         os.chmod(local_request, 0o600)
         result = _run([*executable_argv, "--session-file", str(local_request), "--output-json", str(local_result)], env=runtime_env)
         journal = local_result.with_suffix(".events.jsonl")
         if result != 0 or not local_result.is_file():
-            return result or 2
+            return finish(result or 2)
         source = journal if journal.is_file() else local_result
         # Upload to a unique sibling and publish with one remote rename. This
         # prevents a reconnect or interrupted copy from exposing partial JSON.
@@ -166,11 +212,13 @@ def connect(*, session_file: str, ssh_host: str | None = None,
         try:
             code = _transport(["scp", "--", str(source), f"{ssh_host}:{remote_tmp}"], attempts=reconnect_attempts)
             if code:
-                return code
-            return _transport(["ssh", ssh_host, "mv", "-f", "--", remote_tmp, remote_result], attempts=reconnect_attempts)
+                return finish(code)
+            return finish(_transport(["ssh", ssh_host, "mv", "-f", "--", remote_tmp, remote_result], attempts=reconnect_attempts))
         finally:
             # A failed scp or mv must not leave private event material behind.
-            subprocess.run(["ssh", ssh_host, "rm", "-f", "--", remote_tmp], check=False)
+            with suppress(subprocess.TimeoutExpired, KeyboardInterrupt):
+                subprocess.run(["ssh", ssh_host, "rm", "-f", "--", remote_tmp], check=False,
+                               timeout=_timeout_seconds())
 
 
 def main() -> int:
