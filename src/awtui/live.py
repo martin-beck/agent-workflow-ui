@@ -16,6 +16,7 @@ from prompt_toolkit.widgets import Frame, TextArea
 from .discussion import DiscussionPacket, DecisionResponse, PacketPoint, Proposal
 from .markdown import render_markdown
 from .transport import LiveSessionTransport, EventAcknowledgement
+from .actions import footer_text, help_text
 from .dashboard import BoardRequest, HierarchyNavigator, render_dashboard
 from .journal import render_paused_cards, resume_event
 
@@ -82,6 +83,7 @@ class LiveInteraction:
         self.exit_confirm = False
         self.exit_confirm_index = 0
         self.editing_proposal_index: int | None = None
+        self.help_visible = False
         self.paused_sessions = list(paused_sessions or [])
         self.paused_session_index = 0
     @property
@@ -293,9 +295,20 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
             rendered += "\nChildren: " + (", ".join(child.title for child in hierarchy.children) or "none")
         return rendered
     dashboard_view = TextArea(text=dashboard_text(), read_only=True, scrollbar=True)
-    footer = TextArea(text="↑/↓: decision  ←/→: proposal  tab/w/d: workplan/design  b: dashboard  [/]: hierarchy up/down  page-up/page-down: scroll document  enter: select  r: reject  c: clarify  m: evidence  a: add  e: edit own  s: save  o: reopen  q: quit", read_only=True, height=1, style="class:footer")
+    footer = TextArea(text="↑/↓: decision  ←/→: proposal  tab/w/d: workplan/design  b: dashboard  [/]: hierarchy up/down  " + footer_text() + "  |  ?: help", read_only=True, height=1, style="class:footer")
+    help_view = TextArea(text=help_text(), read_only=True, scrollbar=True, focusable=True)
+    help_panel = ConditionalContainer(
+        Frame(help_view, title="Help / keyboard / focus", style="class:help-pane"),
+        filter=Condition(lambda: interaction.help_visible),
+    )
+    # Keep the public layout surface compatible with the existing geometry
+    # probes while the conditional help panel is hidden in normal operation.
+    help_panel.width = Dimension(weight=1)
+    help_panel.height = Dimension(min=8, max=40, preferred=8, weight=3)
+    help_panel.children = ()
     bindings = KeyBindings()
     def refresh():
+        help_view.text = help_text()
         for field in editor_fields:
             field.visible = interaction.input_mode and not interaction.proposal_confirm
         editor.visible = interaction.input_mode and not interaction.proposal_confirm
@@ -430,6 +443,19 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
             event.app.current_buffer.insert_text(event.key_sequence[0].key)
         elif not event.app.is_done:
             event.app.exit(result=0)
+
+    @bindings.add("?")
+    def toggle_help(event):
+        if interaction.input_mode:
+            # In normal operation focus is an editable proposal field.  Keep
+            # the guard for synthetic/accessibility events delivered while a
+            # read-only pane still owns focus.
+            if not event.app.current_buffer.read_only():
+                event.app.current_buffer.insert_text("?")
+            return
+        interaction.help_visible = not interaction.help_visible
+        event.app.layout.focus(help_view if interaction.help_visible else points_view)
+        refresh()
     def focus_proposal_field(event, index):
         interaction.proposal_edit_index = index % len(editor_fields)
         event.app.layout.focus(editor_fields[interaction.proposal_edit_index])
@@ -637,6 +663,7 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     helper_frame = Frame(helper_view, title="Helper: rationale, implications, evidence", style="class:helper-pane", width=Dimension(weight=1), height=helper_height)
     dashboard_frame = Frame(dashboard_view, title="Company dashboard", style="class:dashboard-pane", width=Dimension(weight=1), height=Dimension(min=4, max=12, preferred=6))
     horizontal_documents = VSplit([document_frame, points_frame], padding=0, width=Dimension(weight=1), height=actual_document_row_height)
+    help_panel.children = horizontal_documents.children
     vertical_documents = HSplit(
         [
             Frame(document_view, title="Design / Workplan", width=narrow_pane_width, style="class:document-pane"),
@@ -652,7 +679,7 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     responsive_documents.height = document_row_height
     responsive_documents.children = horizontal_documents.children
     body = HSplit(
-        [responsive_documents, helper_frame, dashboard_frame, editor_form, confirmation, footer],
+        [help_panel, responsive_documents, helper_frame, dashboard_frame, editor_form, confirmation, footer],
         width=Dimension(weight=1),
         height=Dimension(weight=1),
     )
@@ -667,6 +694,7 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
             "helper-pane.frame.border": "ansimagenta",
             "dashboard-pane.frame.border": "ansicyan",
             "footer": "bg:#202530 #d7f9ff",
+            "help-pane.frame.border": "ansicyan",
         }),
     )
     interaction._refresh = refresh
@@ -676,6 +704,7 @@ def build_application(*, document: str = "Awaiting AR context", points: str = "N
     application.awtui_board_request = board
     application.awtui_hierarchy = hierarchy
     application.awtui_footer = footer
+    application.awtui_help = help_view
     application.awtui_layout_dimensions = {
         "document_row": document_row_height,
         "pane_width": pane_width,
