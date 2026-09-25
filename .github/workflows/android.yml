@@ -77,10 +77,6 @@ jobs:
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
           disable-animations: true
           script: |
-            adb wait-for-device
-            adb shell settings put global window_animation_scale 0
-            adb shell settings put global transition_animation_scale 0
-            adb shell settings put global animator_duration_scale 0
             cd android
             timeout 12m ./gradlew --no-daemon :app:connectedDebugAndroidTest --stacktrace
             mkdir -p build/connected-artifacts
