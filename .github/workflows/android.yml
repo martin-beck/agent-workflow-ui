@@ -14,6 +14,7 @@ jobs:
   android-build:
     name: Android build (${{ matrix.abi }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -28,13 +29,14 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
         env:
           ANDROID_ABI: ${{ matrix.abi }}
       - name: Generate checksum and build metadata
         run: |
           sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/app-debug.apk.sha256
-          printf 'commit=%s\nabi=%s\njava=%s\n' "$GITHUB_SHA" "${{ matrix.abi }}" "$(java -version 2>&1 | head -1)" > app/build/outputs/apk/debug/build-metadata.txt
+          printf 'commit=%s\nabi=%s\njava=%s\ngradle=%s\n' "$GITHUB_SHA" "${{ matrix.abi }}" "$(java -version 2>&1 | head -1)" "$(./gradlew --version | awk '/Gradle / {print $2; exit}')" > app/build/outputs/apk/debug/build-metadata.txt
+          ./gradlew --no-daemon :app:dependencies --configuration debugRuntimeClasspath > app/build/outputs/apk/debug/runtime-dependencies.txt
       - uses: actions/upload-artifact@v4
         with:
           name: agent-workflow-ui-debug-apk-${{ matrix.abi }}
@@ -42,11 +44,13 @@ jobs:
             android/app/build/outputs/apk/debug/app-debug.apk
             android/app/build/outputs/apk/debug/app-debug.apk.sha256
             android/app/build/outputs/apk/debug/build-metadata.txt
+            android/app/build/outputs/apk/debug/runtime-dependencies.txt
           if-no-files-found: error
 
   emulator-e2e:
     name: Android emulator E2E
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: android-build
     steps:
       - uses: actions/checkout@v4
@@ -62,6 +66,24 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
           disable-animations: true
-          script: cd android && ./gradlew :app:connectedDebugAndroidTest
+          script: |
+            adb wait-for-device
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
+            cd android
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest --stacktrace
+            mkdir -p build/connected-artifacts
+            adb exec-out screencap -p > build/connected-artifacts/emulator-workspace.png
+      - name: Upload emulator test reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-emulator-e2e-reports
+          if-no-files-found: warn
+          path: |
+            android/app/build/outputs/androidTest-results/**
+            android/app/build/reports/androidTests/**
+            android/build/connected-artifacts/**
