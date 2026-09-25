@@ -51,8 +51,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.agentworkflowui.data.AndroidBridgeClient
+import com.example.agentworkflowui.data.DeviceIdentity
 import com.example.agentworkflowui.ui.scanner.QrScanner
 import com.example.agentworkflowui.theme.AgentWorkflowUITheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 private data class Decision(val id: String, val title: String, val context: String,
@@ -151,14 +156,41 @@ fun WorkflowApp() {
 @Composable
 private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: () -> Unit) {
   val context = LocalContext.current
+  val scope = androidx.compose.runtime.rememberCoroutineScope()
   var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
+  var scanned by remember { mutableStateOf<String?>(null) }
+  var consent by remember { mutableStateOf(false) }
+  var error by remember { mutableStateOf<String?>(null) }
   val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
   AlertDialog(onDismissRequest = onDismiss, title = { Text("Register this phone") }, text = {
     Column {
-      Text("Scan the QR code shown by the workflow project. The app will display the project identity and ask for consent before creating a device registration.")
+      Text("Scan the QR code shown by the workflow project. The app displays the project identity and asks for consent before creating a device registration.")
       Spacer(Modifier.height(10.dp))
-      if (granted) QrScanner(onPayload = { onRegistered() }, modifier = Modifier.fillMaxWidth().height(260.dp))
+      if (scanned == null && granted) QrScanner(onPayload = { scanned = it }, modifier = Modifier.fillMaxWidth().height(260.dp))
       else Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }) { Text("Allow camera") }
+      scanned?.let { payload ->
+        val qr = runCatching { JSONObject(payload) }.getOrNull()
+        Text("Project: ${qr?.optString("project_id", "invalid")}")
+        Text("Endpoint: ${qr?.optString("endpoint", "invalid")}", style = MaterialTheme.typography.bodySmall)
+        Text("The phone's device key stays in Android Keystore.", style = MaterialTheme.typography.bodySmall)
+        if (consent) Text("Registering…") else Button(onClick = {
+          consent = true
+          scope.launch {
+            try {
+              require(qr != null) { "QR payload is not valid JSON" }
+              val response = withContext(Dispatchers.IO) {
+                AndroidBridgeClient(qr.getString("endpoint")).register(qr, DeviceIdentity.publicKey(), listOf("decisions", "markdown", "audit"))
+              }
+              require(response.optString("device_id").isNotBlank()) { "service returned no device identity" }
+              onRegistered()
+            } catch (exception: Exception) {
+              consent = false
+              error = exception.message ?: "registration failed"
+            }
+          }
+        }) { Text("Approve and register") }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+      }
     }
   }, confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
