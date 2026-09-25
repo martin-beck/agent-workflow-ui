@@ -17,10 +17,10 @@ def test_registration_is_one_time_and_event_routing_is_idempotency_guarded(tmp_p
                                message=message, project_id="p", session_id="session-1",
                                task_revision=2, packet_digest=message["packet_digest"])
     assert ack["kind"] == "android-ack"
-    with pytest.raises(ValueError, match="replayed"):
-        registry.route_event(device_id=response["device_id"], credential=response["credential"],
-                             message=message, project_id="p", session_id="session-1",
-                             task_revision=2, packet_digest=message["packet_digest"])
+    retry = registry.route_event(device_id=response["device_id"], credential=response["credential"],
+                                 message=message, project_id="p", session_id="session-1",
+                                 task_revision=2, packet_digest=message["packet_digest"])
+    assert retry["idempotent"] is True
     with pytest.raises(ValueError, match="already redeemed"):
         registry.redeem(qr, device_public_key="z" * 32, capabilities=[])
 
@@ -67,3 +67,42 @@ def test_expired_device_credential_cannot_poll(tmp_path):
     registry.state["devices"][response["device_id"]]["credential_expires_at"] = "2026-09-25T11:59:00Z"
     with pytest.raises(ValueError, match="expired"):
         registry.get_batch(device_id=response["device_id"], credential=response["credential"])
+
+
+def _device_and_message(registry, *, sequence, answer="A", session="sparse"):
+    qr = registry.create_bootstrap(project_id="p", endpoint="https://workflow.example")
+    response = registry.redeem(qr, device_public_key=("k" + str(sequence)) * 32,
+                                capabilities=["decisions"])
+    message = {"schema_version": "1.0", "kind": "android-decision-event",
+               "project_id": "p", "device_id": response["device_id"], "session_id": session,
+               "task_revision": 2, "packet_digest": "sha256:" + "a" * 64,
+               "sequence": sequence, "event_type": "select",
+               "payload": {"decision_id": "D-" + str(sequence), "answer": answer}}
+    return response, message
+
+
+def test_sparse_session_sequence_is_accepted_and_repeated_save_is_idempotent(tmp_path):
+    registry = AndroidDeviceRegistry(tmp_path / "service.json")
+    response, message = _device_and_message(registry, sequence=2)
+    first = registry.route_event(device_id=response["device_id"], credential=response["credential"],
+                                 message=message, project_id="p", session_id="sparse",
+                                 task_revision=2, packet_digest=message["packet_digest"])
+    retry = registry.route_event(device_id=response["device_id"], credential=response["credential"],
+                                message=message, project_id="p", session_id="sparse",
+                                task_revision=2, packet_digest=message["packet_digest"])
+    assert first["idempotent"] is False
+    assert retry["idempotent"] is True
+    assert len(registry.state["events"]) == 1
+
+
+def test_same_sequence_with_changed_answer_is_rejected(tmp_path):
+    registry = AndroidDeviceRegistry(tmp_path / "service.json")
+    response, message = _device_and_message(registry, sequence=1, answer="A")
+    registry.route_event(device_id=response["device_id"], credential=response["credential"],
+                         message=message, project_id="p", session_id="sparse",
+                         task_revision=2, packet_digest=message["packet_digest"])
+    changed = dict(message, payload={"decision_id": "D-1", "answer": "B"})
+    with pytest.raises(ValueError, match="collision"):
+        registry.route_event(device_id=response["device_id"], credential=response["credential"],
+                             message=changed, project_id="p", session_id="sparse",
+                             task_revision=2, packet_digest=message["packet_digest"])

@@ -37,6 +37,18 @@ class RegistrationStore(context: Context) {
 
   fun clear() = preferences.edit().clear().apply()
 
+  /** Event outbox uses the same device-bound encryption as registration data. */
+  fun eventJournal(): EventJournal = EventJournal(object : EventJournal.Storage {
+    override fun read(): String? = preferences.getString(EVENTS, null)?.let { encoded ->
+      runCatching { String(decrypt(Base64.decode(encoded, Base64.NO_WRAP)), StandardCharsets.UTF_8) }.getOrNull()
+    }
+
+    override fun write(value: String) {
+      preferences.edit().putString(EVENTS,
+        Base64.encodeToString(encrypt(value.toByteArray(StandardCharsets.UTF_8)), Base64.NO_WRAP)).commit()
+    }
+  })
+
   private fun encrypt(plain: ByteArray): ByteArray {
     val cipher = Cipher.getInstance("AES/GCM/NoPadding")
     cipher.init(Cipher.ENCRYPT_MODE, key())
@@ -71,6 +83,7 @@ class RegistrationStore(context: Context) {
   companion object {
     private const val PREFERENCES = "workflow-ui-registration"
     private const val PAYLOAD = "encrypted-registration"
+    private const val EVENTS = "encrypted-event-journal"
     private const val KEY_ALIAS = "agent-workflow-ui-registration"
     private const val GCM_IV_BYTES = 12
   }

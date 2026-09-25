@@ -173,17 +173,27 @@ fun WorkflowApp() {
                 scope.launch {
                   runCatching {
                     withContext(Dispatchers.IO) {
-                      decisions.forEachIndexed { index, decision ->
+                      val journal = RegistrationStore(context).eventJournal()
+                      decisions.forEach { decision ->
                         val answer = decision.own.ifBlank {
-                          decision.selected?.let { decision.proposals[it] } ?: return@forEachIndexed
+                          decision.selected?.let { decision.proposals[it] } ?: return@forEach
                         }
-                        val event = JSONObject().put("schema_version", "1.0")
-                          .put("kind", "android-decision-event").put("project_id", projectId)
-                          .put("session_id", sessionId).put("task_revision", taskRevision)
-                          .put("packet_digest", packetDigest).put("sequence", index + 1)
-                          .put("event_type", "select")
-                          .put("payload", JSONObject().put("decision_id", decision.id).put("answer", answer))
-                        AndroidBridgeClient(endpoint).sendEvent(deviceId, credential, event)
+                        journal.reserve(sessionId, decision.id, answer) { sequence ->
+                          JSONObject().put("schema_version", "1.0")
+                            .put("kind", "android-decision-event").put("project_id", projectId)
+                            .put("session_id", sessionId).put("task_revision", taskRevision)
+                            .put("packet_digest", packetDigest).put("sequence", sequence)
+                            .put("event_type", "select")
+                            .put("payload", JSONObject().put("decision_id", decision.id).put("answer", answer))
+                        }
+                      }
+                      val client = AndroidBridgeClient(endpoint)
+                      // Send every durable outbox item in sequence order. A retry
+                      // uses the exact same sequence and payload and is accepted
+                      // idempotently by AndroidDeviceRegistry.
+                      journal.pending(sessionId).forEach { pending ->
+                        client.sendEvent(deviceId, credential, pending.event)
+                        journal.acknowledge(sessionId, pending.sequence)
                       }
                     }
                   }.onSuccess { saved = true }.onFailure { connectionState = "Save failed; retry" }

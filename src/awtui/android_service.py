@@ -36,6 +36,12 @@ def _parse(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _event_digest(message: dict[str, Any]) -> str:
+    """Digest the complete canonical event for idempotent retries."""
+    encoded = json.dumps(message, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
 class AndroidDeviceRegistry:
     """Authenticated one-time registration and revision-bound event registry."""
 
@@ -97,7 +103,8 @@ class AndroidDeviceRegistry:
         self.state["devices"][device_id] = {"project_id": request["project_id"],
             "public_key": device_public_key, "capabilities": request["capabilities"],
             "credential_digest": hashlib.sha256(credential.encode()).hexdigest(),
-            "revoked": False, "last_sequence": 0, "last_seen": _iso(self.clock()),
+            "revoked": False, "last_sequence": 0, "sessions": {},
+            "last_seen": _iso(self.clock()),
             "credential_expires_at": credential_expires}
         self._save()
         return {"schema_version": "1.0", "kind": "android-registration-response",
@@ -168,13 +175,35 @@ class AndroidDeviceRegistry:
         validate_decision_message(message, project_id=project_id, session_id=session_id,
                                   task_revision=task_revision, packet_digest=packet_digest,
                                   device_id=device_id)
-        if message["sequence"] <= device["last_sequence"]:
+        # Sequence numbers are monotonic within a session, not tied to the
+        # decision's array index.  Persist the accepted message digest so a
+        # lost acknowledgement can be retried safely without duplicating the
+        # Coordinator event.  A reused sequence with different content is a
+        # fail-closed collision.
+        sessions = device.setdefault("sessions", {})
+        session = sessions.setdefault(session_id, {"last_sequence": 0, "events": {}})
+        sequence = message["sequence"]
+        digest = _event_digest(message)
+        previous = session["events"].get(str(sequence))
+        if previous is not None:
+            if previous != digest:
+                raise ValueError("Android event sequence collision")
+            device["last_seen"] = _iso(self.clock())
+            self._save()
+            return {"schema_version": "1.0", "kind": "android-ack", "project_id": project_id,
+                    "device_id": device_id, "session_id": session_id,
+                    "task_revision": task_revision, "packet_digest": packet_digest,
+                    "sequence": sequence, "idempotent": True}
+        if sequence <= session["last_sequence"]:
             raise ValueError("replayed Android event sequence")
-        device["last_sequence"] = message["sequence"]
+        session["last_sequence"] = sequence
+        session["events"][str(sequence)] = digest
+        # Retain the legacy aggregate for older state readers and diagnostics.
+        device["last_sequence"] = max(device.get("last_sequence", 0), sequence)
         device["last_seen"] = _iso(self.clock())
         self.state["events"].append({"device_id": device_id, "message": message})
         self._save()
         return {"schema_version": "1.0", "kind": "android-ack", "project_id": project_id,
                 "device_id": device_id, "session_id": session_id,
                 "task_revision": task_revision, "packet_digest": packet_digest,
-                "sequence": message["sequence"]}
+                "sequence": message["sequence"], "idempotent": False}
