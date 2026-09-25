@@ -85,9 +85,14 @@ fun WorkflowApp() {
     val snackbars = remember { SnackbarHostState() }
     var registered by remember { mutableStateOf(false) }
     var endpoint by remember { mutableStateOf("") }
+    var projectId by remember { mutableStateOf("") }
     var deviceId by remember { mutableStateOf("") }
     var credential by remember { mutableStateOf("") }
     var connectionState by remember { mutableStateOf("Not registered") }
+    var sessionId by remember { mutableStateOf("") }
+    var taskRevision by remember { mutableIntStateOf(0) }
+    var packetDigest by remember { mutableStateOf("") }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var showScanner by remember { mutableStateOf(false) }
     var current by remember { mutableIntStateOf(0) }
     var tab by remember { mutableIntStateOf(0) }
@@ -102,6 +107,7 @@ fun WorkflowApp() {
     LaunchedEffect(Unit) {
       val prefs = context.getSharedPreferences("workflow-ui-registration", 0)
       endpoint = prefs.getString("endpoint", "") ?: ""
+      projectId = prefs.getString("project_id", "") ?: ""
       deviceId = prefs.getString("device_id", "") ?: ""
       credential = prefs.getString("credential", "") ?: ""
       registered = endpoint.isNotBlank() && deviceId.isNotBlank() && credential.isNotBlank()
@@ -113,6 +119,9 @@ fun WorkflowApp() {
           val response = withContext(Dispatchers.IO) { AndroidBridgeClient(endpoint).session(deviceId, credential) }
           connectionState = if (response.optString("status") == "pending") "Connected • decision pending" else "Connected • waiting"
           response.optJSONObject("batch")?.let { batch ->
+            sessionId = batch.optString("session_id")
+            taskRevision = batch.optInt("task_revision")
+            packetDigest = batch.optString("packet_digest")
             val live = decisionsFromBatch(batch)
             if (live.isNotEmpty()) decisions = live
           }
@@ -135,7 +144,30 @@ fun WorkflowApp() {
           Row {
             OutlinedButton(onClick = { showScanner = true }) { Text(if (registered) "Replace phone" else "Register phone") }
             Spacer(Modifier.width(8.dp))
-            Button(onClick = { saved = true }) { Text(if (saved) "Saved" else "Save") }
+            Button(onClick = {
+              if (!registered || sessionId.isBlank() || packetDigest.isBlank()) {
+                saved = true
+              } else {
+                scope.launch {
+                  runCatching {
+                    withContext(Dispatchers.IO) {
+                      decisions.forEachIndexed { index, decision ->
+                        val answer = decision.own.ifBlank {
+                          decision.selected?.let { decision.proposals[it] } ?: return@forEachIndexed
+                        }
+                        val event = JSONObject().put("schema_version", "1.0")
+                          .put("kind", "android-decision-event").put("project_id", projectId)
+                          .put("session_id", sessionId).put("task_revision", taskRevision)
+                          .put("packet_digest", packetDigest).put("sequence", index + 1)
+                          .put("event_type", "select")
+                          .put("payload", JSONObject().put("decision_id", decision.id).put("answer", answer))
+                        AndroidBridgeClient(endpoint).sendEvent(deviceId, credential, event)
+                      }
+                    }
+                  }.onSuccess { saved = true }.onFailure { connectionState = "Save failed; retry" }
+                }
+              }
+            }) { Text(if (saved) "Saved" else "Save") }
           }
         }
         Text("${decisions.count { it.selected != null || it.own.isNotBlank() }} / ${decisions.size} decisions answered",
@@ -187,9 +219,9 @@ fun WorkflowApp() {
     }
     if (showScanner) {
       RegistrationDialog(onDismiss = { showScanner = false }, onRegistered = { result ->
-        endpoint = result.first; deviceId = result.second; credential = result.third
+        projectId = result.projectId; endpoint = result.endpoint; deviceId = result.deviceId; credential = result.credential
         context.getSharedPreferences("workflow-ui-registration", 0).edit()
-          .putString("endpoint", endpoint).putString("device_id", deviceId)
+          .putString("project_id", projectId).putString("endpoint", endpoint).putString("device_id", deviceId)
           .putString("credential", credential).apply()
         registered = true; showScanner = false
       })
@@ -197,8 +229,10 @@ fun WorkflowApp() {
   }
 }
 
+private data class Registration(val projectId: String, val endpoint: String, val deviceId: String, val credential: String)
+
 @Composable
-private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: (Triple<String, String, String>) -> Unit) {
+private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: (Registration) -> Unit) {
   val context = LocalContext.current
   val scope = androidx.compose.runtime.rememberCoroutineScope()
   var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
@@ -226,7 +260,8 @@ private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: (Triple<Stri
                 AndroidBridgeClient(qr.getString("endpoint")).register(qr, DeviceIdentity.publicKey(), listOf("decisions", "markdown", "audit"))
               }
               require(response.optString("device_id").isNotBlank()) { "service returned no device identity" }
-              onRegistered(Triple(qr.getString("endpoint"), response.getString("device_id"), response.getString("credential")))
+              onRegistered(Registration(response.getString("project_id"), qr.getString("endpoint"),
+                response.getString("device_id"), response.getString("credential")))
             } catch (exception: Exception) {
               consent = false
               error = exception.message ?: "registration failed"
