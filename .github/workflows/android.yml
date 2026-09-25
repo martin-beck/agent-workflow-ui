@@ -1,6 +1,7 @@
 name: Android development APK
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths: ["android/**", "src/awtui/android*.py", "tests/test_android*.py", ".github/workflows/android.yml"]
@@ -53,6 +54,9 @@ jobs:
 
   emulator-e2e:
     name: Android emulator E2E
+    # Hosted emulators are opt-in. Pull requests use the controlled local
+    # runner workflow instead, avoiding unbounded hosted emulator queues.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: android-build
