@@ -5,6 +5,7 @@ import threading
 from http.server import ThreadingHTTPServer
 
 import pytest
+from android_fixtures import sign_registration
 
 from awtui.android_client import AndroidRemoteClient
 from awtui.android_server import _Handler
@@ -14,7 +15,9 @@ from awtui.android_service import AndroidDeviceRegistry
 def test_remote_client_polls_and_submits_revision_bound_batch(tmp_path):
     registry = AndroidDeviceRegistry(tmp_path / "state.json")
     qr = registry.create_bootstrap(project_id="p", endpoint="https://workflow.example")
-    registration = registry.redeem(qr, device_public_key="k" * 32, capabilities=["decisions"])
+    public_key, signature = sign_registration(qr)
+    registration = registry.redeem(qr, device_public_key=public_key, capabilities=["decisions"],
+                                   proof_signature=signature, consent=True)
     handler = type("RemoteHandler", (_Handler,), {"registry": registry, "service_key": "key"})
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

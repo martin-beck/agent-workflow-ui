@@ -96,4 +96,5 @@ dependencies {
   implementation(libs.androidx.camera.view)
   implementation(libs.mlkit.barcode.scanning)
   implementation(libs.kotlinx.coroutines.android)
+  implementation(libs.jsch)
 }
