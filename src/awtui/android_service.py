@@ -41,7 +41,7 @@ class AndroidDeviceRegistry:
 
     def _load(self) -> dict[str, Any]:
         if not self.state_path.exists():
-            return {"bootstraps": {}, "devices": {}, "events": []}
+            return {"bootstraps": {}, "devices": {}, "events": [], "batches": {}}
         value = json.loads(self.state_path.read_text(encoding="utf-8"))
         if not isinstance(value, dict):
             raise ValueError("Android service state must be an object")
@@ -103,6 +103,34 @@ class AndroidDeviceRegistry:
             raise ValueError("unknown Android device")
         device["revoked"] = True
         self._save()
+
+    def publish_batch(self, *, project_id: str, batch: dict[str, Any]) -> None:
+        """Publish the authoritative pending batch for registered Android clients.
+
+        The coordinator calls this after generating the same revision-bound packet
+        used by the desktop UI.  The service stores the complete Markdown and
+        decision payload, never inventing or rewriting decisions.
+        """
+        required = ("session_id", "task_revision", "packet_digest", "decisions",
+                    "design_markdown", "workplan_markdown")
+        missing = [key for key in required if key not in batch]
+        if missing:
+            raise ValueError("batch missing required fields: " + ", ".join(missing))
+        if not isinstance(batch["decisions"], list):
+            raise ValueError("batch decisions must be a list")
+        self.state.setdefault("batches", {})[project_id] = json.loads(json.dumps(batch))
+        self._save()
+
+    def get_batch(self, *, device_id: str, credential: str) -> dict[str, Any] | None:
+        device = self.state["devices"].get(device_id)
+        if not device or device["revoked"]:
+            raise ValueError("Android device is not registered")
+        digest = hashlib.sha256(credential.encode()).hexdigest()
+        if not secrets.compare_digest(digest, device["credential_digest"]):
+            raise ValueError("invalid Android device credential")
+        device["last_seen"] = _iso(self.clock())
+        self._save()
+        return self.state.setdefault("batches", {}).get(device["project_id"])
 
     def route_event(self, *, device_id: str, credential: str, message: dict[str, Any],
                     project_id: str, session_id: str, task_revision: int,

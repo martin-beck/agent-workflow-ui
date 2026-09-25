@@ -13,6 +13,20 @@ class AndroidBridgeClient(private val endpoint: String) {
   fun sendEvent(deviceId: String, credential: String, event: JSONObject): JSONObject =
     post("/v1/events", event.put("device_id", deviceId), credential)
 
+  fun session(deviceId: String, credential: String): JSONObject {
+    val connection = (URL(endpoint.trimEnd('/') + "/v1/session").openConnection() as HttpURLConnection).apply {
+      requestMethod = "GET"
+      connectTimeout = 10_000
+      readTimeout = 20_000
+      setRequestProperty("Authorization", "Bearer $credential")
+      setRequestProperty("X-Device-Id", deviceId)
+    }
+    val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
+    val response = stream.bufferedReader().use { it.readText() }
+    if (connection.responseCode !in 200..299) error("workflow service rejected session request: $response")
+    return JSONObject(response)
+  }
+
   private fun post(path: String, body: JSONObject, credential: String? = null): JSONObject {
     val connection = (URL(endpoint.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
       requestMethod = "POST"

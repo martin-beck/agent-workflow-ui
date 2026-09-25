@@ -64,12 +64,30 @@ private data class Decision(val id: String, val title: String, val context: Stri
                             val proposals: List<String>, val selected: Int? = null,
                             val own: String = "")
 
+private fun decisionsFromBatch(batch: JSONObject): List<Decision> {
+  val values = batch.optJSONArray("decisions") ?: return emptyList()
+  return buildList {
+    for (index in 0 until values.length()) {
+      val value = values.getJSONObject(index)
+      val proposals = value.optJSONArray("proposals") ?: org.json.JSONArray()
+      add(Decision(value.optString("id", "D-${index + 1}"),
+        value.optString("title", "Decision ${index + 1}"),
+        value.optString("context", "AR decision"),
+        buildList { for (proposalIndex in 0 until proposals.length()) add(proposals.optString(proposalIndex)) }))
+    }
+  }
+}
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun WorkflowApp() {
   AgentWorkflowUITheme {
     val snackbars = remember { SnackbarHostState() }
     var registered by remember { mutableStateOf(false) }
+    var endpoint by remember { mutableStateOf("") }
+    var deviceId by remember { mutableStateOf("") }
+    var credential by remember { mutableStateOf("") }
+    var connectionState by remember { mutableStateOf("Not registered") }
     var showScanner by remember { mutableStateOf(false) }
     var current by remember { mutableIntStateOf(0) }
     var tab by remember { mutableIntStateOf(0) }
@@ -80,10 +98,32 @@ fun WorkflowApp() {
         Decision("D-2", "Benchmark acceptance gate", "Work plan §4", listOf("Strict gate", "Advisory gate")),
         Decision("D-3", "Rollout and rollback", "Work plan §6", listOf("Canary", "Immediate"))))
     }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+      val prefs = context.getSharedPreferences("workflow-ui-registration", 0)
+      endpoint = prefs.getString("endpoint", "") ?: ""
+      deviceId = prefs.getString("device_id", "") ?: ""
+      credential = prefs.getString("credential", "") ?: ""
+      registered = endpoint.isNotBlank() && deviceId.isNotBlank() && credential.isNotBlank()
+    }
+    LaunchedEffect(registered, endpoint, deviceId, credential) {
+      if (!registered) return@LaunchedEffect
+      while (true) {
+        runCatching {
+          val response = withContext(Dispatchers.IO) { AndroidBridgeClient(endpoint).session(deviceId, credential) }
+          connectionState = if (response.optString("status") == "pending") "Connected • decision pending" else "Connected • waiting"
+          response.optJSONObject("batch")?.let { batch ->
+            val live = decisionsFromBatch(batch)
+            if (live.isNotEmpty()) decisions = live
+          }
+        }.onFailure { connectionState = "Reconnect pending" }
+        kotlinx.coroutines.delay(5_000)
+      }
+    }
     val active = decisions[current]
     Scaffold(topBar = {
       TopAppBar(title = { Text("Agent Workflow UI") }, actions = {
-        Text(if (registered) "● Connected" else "○ Not registered",
+        Text(if (registered) "● $connectionState" else "○ $connectionState",
           color = if (registered) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
           modifier = Modifier.padding(end = 12.dp))
       })
@@ -146,7 +186,11 @@ fun WorkflowApp() {
       }
     }
     if (showScanner) {
-      RegistrationDialog(onDismiss = { showScanner = false }, onRegistered = {
+      RegistrationDialog(onDismiss = { showScanner = false }, onRegistered = { result ->
+        endpoint = result.first; deviceId = result.second; credential = result.third
+        context.getSharedPreferences("workflow-ui-registration", 0).edit()
+          .putString("endpoint", endpoint).putString("device_id", deviceId)
+          .putString("credential", credential).apply()
         registered = true; showScanner = false
       })
     }
@@ -154,7 +198,7 @@ fun WorkflowApp() {
 }
 
 @Composable
-private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: () -> Unit) {
+private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: (Triple<String, String, String>) -> Unit) {
   val context = LocalContext.current
   val scope = androidx.compose.runtime.rememberCoroutineScope()
   var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
@@ -182,7 +226,7 @@ private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: () -> Unit) 
                 AndroidBridgeClient(qr.getString("endpoint")).register(qr, DeviceIdentity.publicKey(), listOf("decisions", "markdown", "audit"))
               }
               require(response.optString("device_id").isNotBlank()) { "service returned no device identity" }
-              onRegistered()
+              onRegistered(Triple(qr.getString("endpoint"), response.getString("device_id"), response.getString("credential")))
             } catch (exception: Exception) {
               consent = false
               error = exception.message ?: "registration failed"

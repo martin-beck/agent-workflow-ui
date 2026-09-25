@@ -1,0 +1,7 @@
+[console_scripts]
+awtui-live = awtui.live:main
+awui = awtui.shortcut:main
+awui-android-service = awtui.android_server:main
+awui-connect = awtui.connect:main
+awui-live = awtui.launcher:main
+awui-token = awtui.tokenctl:main
