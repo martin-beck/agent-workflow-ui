@@ -1,8 +1,7 @@
 # Agent Workflow UI
 
-Release line: **v0.6.2** (the v0.6.1 scale and release-hardening update plus the
-cross-platform bootstrap qualification and immutable compatibility release
-gates).
+Release line: **v0.6.4** (SSH rendezvous discovery, consented Android tunnel
+enrollment, cross-platform qualification, and immutable compatibility gates).
 
 Agent Workflow UI is the interactive Linux desktop and terminal application
 for human-oracle discussion, decision selection, and post-discussion conflict
