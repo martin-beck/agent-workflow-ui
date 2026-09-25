@@ -1,0 +1,20 @@
+{
+  "specification": "android-endpoint-discovery",
+  "version": 1,
+  "authority": "agent-workflow-ui",
+  "purpose": "Enumerate possible SSH paths for phone pairing without asserting reachability from service-side evidence.",
+  "rules": [
+    "OpenSSH -G is the sole source of effective service-side SSH alias configuration.",
+    "Never serialize SSH users, identities, config paths, proxy commands, environment values, credentials, or raw command output.",
+    "Candidates preserve provenance, port, address family, priority, optional expiry, and SSH host-key fingerprints.",
+    "ssh-keyscan fingerprints are untrusted observations until compared with an independently approved fingerprint.",
+    "Reject loopback, link-local, unspecified, multicast, malformed and option-like candidates.",
+    "External IP reflection, STUN, VPN, DNS and relay discovery are optional hints; no network provider is required for local use.",
+    "Only a probe originating on the Android device network can mark a candidate reachable.",
+    "Candidate ordering prefers explicit relay, VPN, stable DNS, then raw public IP candidates."
+  ],
+  "verification": {
+    "offline_command": "pytest -q tests/test_endpoint_discovery.py",
+    "android_unit_command": "./android/gradlew -p android :app:testDebugUnitTest"
+  }
+}
