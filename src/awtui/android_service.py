@@ -18,7 +18,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from .android import registration_qr, registration_request, validate_decision_message
+from .android import (registration_qr, registration_request, ssh_public_key_fingerprint,
+                      validate_decision_message, verify_ecdsa_signature)
 
 
 def _valid_digest(value: str) -> bool:
@@ -61,6 +62,21 @@ class AndroidDeviceRegistry:
         self.clock = clock
         self._lock = threading.RLock()
         self.state = self._load()
+        self.ssh_service_alias: str | None = self.state.get("ssh_service_alias")
+        self.ssh_key_installer: Callable[..., None] | None = None
+
+    def configure_ssh_rendezvous(self, *, metadata: dict[str, Any], service_alias: str,
+                                 installer: Callable[..., None]) -> None:
+        if not service_alias:
+            raise ValueError("service-side SSH config alias is required")
+        registration_qr(project_id="configure", endpoint="https://localhost",
+                        bootstrap_id="configure_12345678", expires_at=_iso(self.clock() + timedelta(minutes=1)),
+                        nonce="a" * 32, ssh_rendezvous=metadata)
+        self.state["ssh_rendezvous"] = dict(metadata)
+        self.state["ssh_service_alias"] = service_alias
+        self.ssh_service_alias = service_alias
+        self.ssh_key_installer = installer
+        self._save()
 
     def _load(self) -> dict[str, Any]:
         if not self.state_path.exists():
@@ -85,14 +101,16 @@ class AndroidDeviceRegistry:
                 os.unlink(temporary)
 
     @_synchronized
-    def create_bootstrap(self, *, project_id: str, endpoint: str, ttl_seconds: int = 300) -> dict[str, Any]:
+    def create_bootstrap(self, *, project_id: str, endpoint: str, ttl_seconds: int = 300,
+                         ssh_rendezvous: dict[str, Any] | None = None) -> dict[str, Any]:
         if not 30 <= ttl_seconds <= 900:
             raise ValueError("bootstrap TTL must be between 30 and 900 seconds")
         bootstrap_id = secrets.token_urlsafe(18)
         nonce = secrets.token_hex(24)
         expires = _iso(self.clock() + timedelta(seconds=ttl_seconds))
         payload = registration_qr(project_id=project_id, endpoint=endpoint,
-                                  bootstrap_id=bootstrap_id, expires_at=expires, nonce=nonce)
+                                  bootstrap_id=bootstrap_id, expires_at=expires, nonce=nonce,
+                                  ssh_rendezvous=ssh_rendezvous or self.state.get("ssh_rendezvous"))
         self.state["bootstraps"][bootstrap_id] = {"project_id": project_id,
             "nonce": nonce, "expires_at": expires, "redeemed": False}
         self._save()
@@ -100,9 +118,10 @@ class AndroidDeviceRegistry:
 
     @_synchronized
     def redeem(self, payload: dict[str, Any], *, device_public_key: str,
-               capabilities: list[str]) -> dict[str, Any]:
+               capabilities: list[str], proof_signature: str, consent: bool) -> dict[str, Any]:
         request = registration_request(payload, device_public_key=device_public_key,
-                                       capabilities=capabilities)
+                                       capabilities=capabilities,
+                                       proof_signature=proof_signature, consent=consent)
         record = self.state["bootstraps"].get(request["bootstrap_id"])
         if not record or record["redeemed"]:
             raise ValueError("registration bootstrap is unknown or already redeemed")
@@ -111,19 +130,109 @@ class AndroidDeviceRegistry:
         if record["project_id"] != request["project_id"] or record["nonce"] != request["nonce"]:
             raise ValueError("registration bootstrap binding mismatch")
         device_id = "android-" + secrets.token_urlsafe(12)
-        credential = secrets.token_urlsafe(32)
         credential_expires = _iso(self.clock() + timedelta(days=30))
+        key_record = None
+        if request.get("ssh_rendezvous"):
+            if not self.ssh_service_alias or self.ssh_key_installer is None:
+                raise ValueError("SSH device enrollment is unavailable; the service tunnel is not configured")
+            from .android_ssh import authorized_key_record
+            key_record = authorized_key_record(device_public_key, device_id,
+                                               request["ssh_rendezvous"]["forward_port"],
+                                               expires_at=credential_expires)
+            # This installer uses the configured service SSH identity. Its
+            # only authorization input is the user's explicit app approval,
+            # the expiring QR nonce, and a verified Keystore signature.
+            self.ssh_key_installer("install", self.ssh_service_alias, device_id, key_record)
+            self.state.setdefault("credential_master", secrets.token_hex(32))
+            credential = self._ssh_credential(device_id, credential_expires)
+        else:
+            credential = secrets.token_urlsafe(32)
         self.state["bootstraps"][request["bootstrap_id"]]["redeemed"] = True
+        public_key_fingerprint = ssh_public_key_fingerprint(device_public_key)
         self.state["devices"][device_id] = {"project_id": request["project_id"],
             "public_key": device_public_key, "capabilities": request["capabilities"],
+            "public_key_fingerprint": public_key_fingerprint,
+            "ssh_rendezvous": request.get("ssh_rendezvous"),
+            "authorized_key_record": key_record,
+            "authorized_key_options": self._authorized_key_options(request),
+            "enrollment_proof_digest": hashlib.sha256(proof_signature.encode()).hexdigest(),
             "credential_digest": hashlib.sha256(credential.encode()).hexdigest(),
             "revoked": False, "last_sequence": 0, "sessions": {},
             "last_seen": _iso(self.clock()),
             "credential_expires_at": credential_expires}
         self._save()
-        return {"schema_version": "1.0", "kind": "android-registration-response",
+        response = {"schema_version": "1.0", "kind": "android-registration-response",
                 "project_id": request["project_id"], "device_id": device_id,
-                "credential": credential, "expires_at": credential_expires}
+                "public_key_fingerprint": public_key_fingerprint,
+                "expires_at": credential_expires}
+        if request.get("ssh_rendezvous"):
+            response["credential_pending"] = True
+        else:
+            response["credential"] = credential
+        return response
+
+    def _ssh_credential(self, device_id: str, expires_at: str) -> str:
+        import base64
+        import hmac
+        master = bytes.fromhex(self.state["credential_master"])
+        message = f"awui-android-ssh-credential-v1\0{device_id}\0{expires_at}".encode()
+        return base64.urlsafe_b64encode(hmac.new(master, message, hashlib.sha256).digest()).decode().rstrip("=")
+
+    @_synchronized
+    def create_ssh_challenge(self, device_id: str) -> dict[str, str]:
+        device = self.state["devices"].get(device_id)
+        if not device or device.get("revoked") or not device.get("ssh_rendezvous"):
+            raise ValueError("Android device has no active SSH registration")
+        challenge_id, nonce = secrets.token_urlsafe(18), secrets.token_hex(24)
+        expires = _iso(self.clock() + timedelta(seconds=60))
+        device.setdefault("ssh_challenges", {})[challenge_id] = {"nonce": nonce, "expires_at": expires}
+        self._save()
+        return {"schema_version": "1.0", "kind": "android-ssh-auth-challenge",
+                "project_id": device["project_id"], "device_id": device_id,
+                "challenge_id": challenge_id, "nonce": nonce, "expires_at": expires}
+
+    @_synchronized
+    def release_ssh_credential(self, *, device_id: str, challenge_id: str,
+                               nonce: str, expires_at: str, signature: str) -> dict[str, str]:
+        device = self.state["devices"].get(device_id)
+        if not device or device.get("revoked") or not device.get("ssh_rendezvous"):
+            raise ValueError("Android device has no active SSH registration")
+        challenge = device.get("ssh_challenges", {}).get(challenge_id)
+        if (not challenge or challenge["nonce"] != nonce or challenge["expires_at"] != expires_at
+                or _parse(expires_at) <= self.clock()):
+            raise ValueError("SSH authentication challenge is stale or unknown")
+        message = ("awui-android-session-v1\n" + "\n".join((device["project_id"], device_id,
+                   challenge_id, nonce, expires_at))).encode()
+        verify_ecdsa_signature(device["public_key"], message, signature)
+        del device["ssh_challenges"][challenge_id]
+        credential = self._ssh_credential(device_id, device["credential_expires_at"])
+        self._save()
+        return {"schema_version": "1.0", "kind": "android-ssh-credential",
+                "project_id": device["project_id"], "device_id": device_id,
+                "credential": credential, "expires_at": device["credential_expires_at"]}
+
+    @staticmethod
+    def _authorized_key_options(request: dict[str, Any]) -> list[str]:
+        """Return the least-privilege OpenSSH options for the enrolled key.
+
+        The enrolling callback installs it only after consent and key proof.
+        """
+        options = ["restrict", "port-forwarding"]
+        rendezvous = request.get("ssh_rendezvous")
+        if rendezvous:
+            options.extend((f'permitopen="127.0.0.1:{rendezvous["forward_port"]}"',
+                            'command="/usr/bin/false"'))
+        return options
+
+    @_synchronized
+    def authorized_key_record(self, device_id: str) -> str:
+        """Return an attributable restricted authorized_keys record for an approved device."""
+        device = self.state["devices"].get(device_id)
+        if not device or device.get("revoked"):
+            raise ValueError("unknown or revoked Android device")
+        if not device.get("authorized_key_record"):
+            raise ValueError("Android device has no SSH enrollment")
+        return device["authorized_key_record"]
 
     @_synchronized
     def revoke(self, device_id: str) -> None:
@@ -131,7 +240,11 @@ class AndroidDeviceRegistry:
         if not device:
             raise ValueError("unknown Android device")
         device["revoked"] = True
+        device["revoked_at"] = _iso(self.clock())
         self._save()
+        if device.get("ssh_rendezvous") and self.ssh_key_installer and self.ssh_service_alias:
+            self.ssh_key_installer("revoke", self.ssh_service_alias, device_id,
+                                   device.get("authorized_key_record") or "")
 
     @_synchronized
     def publish_batch(self, *, project_id: str, batch: dict[str, Any]) -> None:

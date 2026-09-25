@@ -2,14 +2,22 @@ from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from android_fixtures import sign_registration
 
 from awtui.android_service import AndroidDeviceRegistry
+
+
+def _redeem(registry, qr, scalar=12345, capabilities=None):
+    public_key, signature = sign_registration(qr, scalar)
+    return registry.redeem(qr, device_public_key=public_key,
+                           capabilities=capabilities or ["decisions"],
+                           proof_signature=signature, consent=True)
 
 
 def test_registration_is_one_time_and_event_routing_is_idempotency_guarded(tmp_path):
     registry = AndroidDeviceRegistry(tmp_path / "service.json")
     qr = registry.create_bootstrap(project_id="p", endpoint="https://workflow.example")
-    response = registry.redeem(qr, device_public_key="k" * 32, capabilities=["decisions"])
+    response = _redeem(registry, qr)
     message = {"schema_version": "1.0", "kind": "android-decision-event",
                "project_id": "p", "device_id": response["device_id"], "session_id": "session-1",
                "task_revision": 2, "packet_digest": "sha256:" + "a" * 64,
@@ -23,7 +31,7 @@ def test_registration_is_one_time_and_event_routing_is_idempotency_guarded(tmp_p
                                  task_revision=2, packet_digest=message["packet_digest"])
     assert retry["idempotent"] is True
     with pytest.raises(ValueError, match="already redeemed"):
-        registry.redeem(qr, device_public_key="z" * 32, capabilities=[])
+        _redeem(registry, qr, scalar=23456, capabilities=[])
 
 
 def test_expired_bootstrap_and_revoked_device_fail_closed(tmp_path):
@@ -32,13 +40,13 @@ def test_expired_bootstrap_and_revoked_device_fail_closed(tmp_path):
     qr = registry.create_bootstrap(project_id="p", endpoint="https://workflow.example", ttl_seconds=30)
     now[0] = datetime(2026, 9, 25, 12, 1, tzinfo=timezone.utc)
     with pytest.raises(ValueError, match="expired"):
-        registry.redeem(qr, device_public_key="k" * 32, capabilities=[])
+        _redeem(registry, qr)
 
 
 def test_published_batch_is_revision_bound_and_only_visible_to_registered_device(tmp_path):
     registry = AndroidDeviceRegistry(tmp_path / "service.json")
     qr = registry.create_bootstrap(project_id="p", endpoint="https://workflow.example")
-    response = registry.redeem(qr, device_public_key="k" * 32, capabilities=["decisions"])
+    response = _redeem(registry, qr)
     batch = {"session_id": "s", "task_revision": 4, "packet_digest": "sha256:" + "b" * 64,
              "decisions": [{"id": "D-1", "title": "Choose", "proposals": ["A", "B"]}],
              "design_markdown": "# Design\n\nChoose A or B.",
@@ -64,7 +72,7 @@ def test_expired_device_credential_cannot_poll(tmp_path):
     now = [datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc)]
     registry = AndroidDeviceRegistry(tmp_path / "service.json", clock=lambda: now[0])
     qr = registry.create_bootstrap(project_id="p", endpoint="https://workflow.example")
-    response = registry.redeem(qr, device_public_key="k" * 32, capabilities=[])
+    response = _redeem(registry, qr)
     registry.state["devices"][response["device_id"]]["credential_expires_at"] = "2026-09-25T11:59:00Z"
     with pytest.raises(ValueError, match="expired"):
         registry.get_batch(device_id=response["device_id"], credential=response["credential"])
@@ -72,8 +80,7 @@ def test_expired_device_credential_cannot_poll(tmp_path):
 
 def _device_and_message(registry, *, sequence, answer="A", session="sparse"):
     qr = registry.create_bootstrap(project_id="p", endpoint="https://workflow.example")
-    response = registry.redeem(qr, device_public_key=("k" + str(sequence)) * 32,
-                                capabilities=["decisions"])
+    response = _redeem(registry, qr, scalar=sequence + 100)
     message = {"schema_version": "1.0", "kind": "android-decision-event",
                "project_id": "p", "device_id": response["device_id"], "session_id": session,
                "task_revision": 2, "packet_digest": "sha256:" + "a" * 64,

@@ -25,7 +25,9 @@ class AndroidBridgeClientTest {
     client.register(
       "{\"project_id\":\"p1\",\"bootstrap_id\":\"b1\"}",
       publicKey = "public-key",
+      proofSignature = "proof-signature",
       capabilities = listOf("decisions", "markdown"),
+      consent = true,
     )
     client.session("d1", "c1")
     client.sendEvent(

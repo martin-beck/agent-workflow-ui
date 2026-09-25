@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import threading
+from android_fixtures import sign_registration
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 
@@ -39,11 +40,13 @@ def test_registration_batch_session_and_event_round_trip(tmp_path):
         assert status == 200 and health["status"] == "ok"
 
         qr = registry.create_bootstrap(project_id="remote-project", endpoint="https://workflow.example")
+        public_key, signature = sign_registration(qr)
         status, registration = _request(
             port,
             "POST",
             "/v1/register",
-            {"qr": qr, "device_public_key": "k" * 32, "capabilities": ["decisions", "markdown"]},
+            {"qr": qr, "device_public_key": public_key, "proof_signature": signature,
+             "consent": True, "capabilities": ["decisions", "markdown"]},
         )
         assert status == 200
 
@@ -101,4 +104,3 @@ def test_registration_batch_session_and_event_round_trip(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
-

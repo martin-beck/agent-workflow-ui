@@ -58,6 +58,7 @@ import androidx.core.content.ContextCompat
 import com.example.agentworkflowui.data.AndroidBridgeClient
 import com.example.agentworkflowui.data.DeviceIdentity
 import com.example.agentworkflowui.data.RegistrationStore
+import com.example.agentworkflowui.data.SshTunnelManager
 import com.example.agentworkflowui.ui.scanner.QrScanner
 import com.example.agentworkflowui.theme.AgentWorkflowUITheme
 import kotlinx.coroutines.Dispatchers
@@ -106,6 +107,8 @@ fun WorkflowApp() {
     val snackbars = remember { SnackbarHostState() }
     var registered by remember { mutableStateOf(false) }
     var endpoint by remember { mutableStateOf("") }
+    var sshBootstrap by remember { mutableStateOf("") }
+    var tunnelEndpoint by remember { mutableStateOf("") }
     var projectId by remember { mutableStateOf("") }
     var deviceId by remember { mutableStateOf("") }
     var credential by remember { mutableStateOf("") }
@@ -124,16 +127,39 @@ fun WorkflowApp() {
       RegistrationStore(context).load()?.let { registration ->
         projectId = registration.projectId
         endpoint = registration.endpoint
+        sshBootstrap = registration.sshBootstrap
         deviceId = registration.deviceId
         credential = registration.credential
         registered = true
       }
     }
-    LaunchedEffect(registered, endpoint, deviceId, credential) {
+    LaunchedEffect(registered, endpoint, deviceId, credential, sshBootstrap) {
       if (!registered) return@LaunchedEffect
-      while (true) {
-        runCatching {
-          val response = withContext(Dispatchers.IO) { AndroidBridgeClient(endpoint).session(deviceId, credential) }
+      var tunnel: com.example.agentworkflowui.data.SshTunnelHandle? = null
+      try {
+        while (true) {
+          runCatching {
+            if (sshBootstrap.isNotBlank() && tunnel?.connected != true) {
+              tunnel?.close()
+              tunnel = withContext(Dispatchers.IO) {
+                SshTunnelManager().connect(JSONObject(sshBootstrap))
+              }
+              tunnelEndpoint = tunnel!!.endpoint
+            }
+            val routedEndpoint = tunnel?.endpoint ?: endpoint
+            val client = AndroidBridgeClient(routedEndpoint)
+            if (sshBootstrap.isNotBlank() && credential.isBlank() && tunnel != null) {
+              val issued = withContext(Dispatchers.IO) {
+                val challenge = client.sshChallenge(deviceId)
+                client.releaseSshCredential(challenge, DeviceIdentity.sshSessionProof(challenge))
+              }
+              credential = issued.getString("credential")
+              RegistrationStore(context).save(RegistrationStore.Registration(
+                projectId, endpoint, deviceId, credential, sshBootstrap))
+            }
+            val response = if (credential.isNotBlank()) {
+              withContext(Dispatchers.IO) { client.session(deviceId, credential) }
+            } else JSONObject().put("status", "idle")
           connectionState = if (response.optString("status") == "pending") "Connected • decision pending" else "Connected • waiting"
           response.optJSONObject("batch")?.let { batch ->
             sessionId = batch.optString("session_id")
@@ -145,8 +171,17 @@ fun WorkflowApp() {
               current = current.coerceAtMost(live.lastIndex)
             }
           }
-        }.onFailure { connectionState = "Reconnect pending" }
-        kotlinx.coroutines.delay(5_000)
+          }.onFailure {
+            if (sshBootstrap.isNotBlank()) {
+              tunnel?.close(); tunnel = null; tunnelEndpoint = ""
+              connectionState = "SSH reconnect pending"
+            } else connectionState = "Reconnect pending"
+          }
+          kotlinx.coroutines.delay(5_000)
+        }
+      } finally {
+        tunnel?.close()
+        tunnelEndpoint = ""
       }
     }
     val active = decisions[current]
@@ -173,6 +208,10 @@ fun WorkflowApp() {
                 scope.launch {
                   runCatching {
                     withContext(Dispatchers.IO) {
+                      val activeEndpoint = if (sshBootstrap.isNotBlank()) {
+                        require(tunnelEndpoint.isNotBlank()) { "SSH tunnel is disconnected; decision event not sent" }
+                        tunnelEndpoint
+                      } else endpoint
                       val journal = RegistrationStore(context).eventJournal()
                       decisions.forEach { decision ->
                         val answer = decision.own.ifBlank {
@@ -189,7 +228,7 @@ fun WorkflowApp() {
                             .toString()
                         }
                       }
-                      val client = AndroidBridgeClient(endpoint)
+                      val client = AndroidBridgeClient(activeEndpoint)
                       // Send every durable outbox item in sequence order. A retry
                       // uses the exact same sequence and payload and is accepted
                       // idempotently by AndroidDeviceRegistry.
@@ -267,7 +306,7 @@ fun WorkflowApp() {
       RegistrationDialog(onDismiss = { showScanner = false }, onRegistered = { result ->
         projectId = result.projectId; endpoint = result.endpoint; deviceId = result.deviceId; credential = result.credential
         RegistrationStore(context).save(RegistrationStore.Registration(
-          projectId, endpoint, deviceId, credential))
+          projectId, endpoint, deviceId, credential, result.sshBootstrap))
         registered = true; showScanner = false
       })
     }
@@ -300,11 +339,15 @@ private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: (Registratio
             try {
               require(qr != null) { "QR payload is not valid JSON" }
               val response = withContext(Dispatchers.IO) {
-                AndroidBridgeClient(qr.getString("endpoint")).register(qr, DeviceIdentity.publicKey(), listOf("decisions", "markdown", "audit"))
+                val bootstrapEndpoint = qr.optString("bootstrap_endpoint", qr.getString("endpoint"))
+                AndroidBridgeClient(bootstrapEndpoint).register(
+                  qr, DeviceIdentity.publicKey(), DeviceIdentity.enrollmentProof(qr),
+                  listOf("decisions", "markdown", "audit"), consent = true)
               }
               require(response.optString("device_id").isNotBlank()) { "service returned no device identity" }
               onRegistered(RegistrationStore.Registration(response.getString("project_id"), qr.getString("endpoint"),
-                response.getString("device_id"), response.getString("credential")))
+                response.getString("device_id"), response.optString("credential", ""),
+                if (qr.has("ssh_rendezvous")) qr.toString() else ""))
             } catch (exception: Exception) {
               consent = false
               error = exception.message ?: "registration failed"

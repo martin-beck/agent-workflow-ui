@@ -23,14 +23,14 @@ class RegistrationStore(context: Context) {
     val encoded = preferences.getString(PAYLOAD, null) ?: return null
     return runCatching {
       val bytes = decrypt(Base64.decode(encoded, Base64.NO_WRAP))
-      val values = String(bytes, StandardCharsets.UTF_8).split("\u0000", limit = 4)
-      require(values.size == 4)
-      Registration(values[0], values[1], values[2], values[3])
+      val values = String(bytes, StandardCharsets.UTF_8).split("\u0000", limit = 5)
+      require(values.size in 4..5)
+      Registration(values[0], values[1], values[2], values[3], values.getOrElse(4) { "" })
     }.getOrNull()
   }
 
   fun save(value: Registration) {
-    val plain = listOf(value.projectId, value.endpoint, value.deviceId, value.credential)
+    val plain = listOf(value.projectId, value.endpoint, value.deviceId, value.credential, value.sshBootstrap)
       .joinToString("\u0000").toByteArray(StandardCharsets.UTF_8)
     preferences.edit().putString(PAYLOAD, Base64.encodeToString(encrypt(plain), Base64.NO_WRAP)).apply()
   }
@@ -78,7 +78,8 @@ class RegistrationStore(context: Context) {
   }
 
   data class Registration(val projectId: String, val endpoint: String,
-                          val deviceId: String, val credential: String)
+                          val deviceId: String, val credential: String,
+                          val sshBootstrap: String = "")
 
   companion object {
     private const val PREFERENCES = "workflow-ui-registration"
