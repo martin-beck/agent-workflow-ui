@@ -129,6 +129,12 @@ fun WorkflowApp() {
         kotlinx.coroutines.delay(5_000)
       }
     }
+    // A newly published batch may contain fewer decisions than the previous
+    // one. Keep the active index valid before reading `active` below.
+    LaunchedEffect(decisions.size) {
+      if (decisions.isEmpty()) current = 0
+      else if (current >= decisions.size) current = decisions.lastIndex
+    }
     val active = decisions[current]
     Scaffold(topBar = {
       TopAppBar(title = { Text("Agent Workflow UI") }, actions = {
@@ -151,6 +157,11 @@ fun WorkflowApp() {
                 scope.launch {
                   runCatching {
                     withContext(Dispatchers.IO) {
+                      // Sequences are device-scoped, not batch-scoped. Persist
+                      // each successful delivery so a retry after a partial
+                      // network failure does not replay sequence 1.
+                      val prefs = context.getSharedPreferences("workflow-ui-registration", 0)
+                      var sequence = prefs.getInt("next_sequence", 1)
                       decisions.forEachIndexed { index, decision ->
                         val answer = decision.own.ifBlank {
                           decision.selected?.let { decision.proposals[it] } ?: return@forEachIndexed
@@ -158,10 +169,12 @@ fun WorkflowApp() {
                         val event = JSONObject().put("schema_version", "1.0")
                           .put("kind", "android-decision-event").put("project_id", projectId)
                           .put("session_id", sessionId).put("task_revision", taskRevision)
-                          .put("packet_digest", packetDigest).put("sequence", index + 1)
+                          .put("packet_digest", packetDigest).put("sequence", sequence)
                           .put("event_type", "select")
                           .put("payload", JSONObject().put("decision_id", decision.id).put("answer", answer))
                         AndroidBridgeClient(endpoint).sendEvent(deviceId, credential, event)
+                        sequence += 1
+                        prefs.edit().putInt("next_sequence", sequence).apply()
                       }
                     }
                   }.onSuccess { saved = true }.onFailure { connectionState = "Save failed; retry" }
