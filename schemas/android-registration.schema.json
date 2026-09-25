@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-workflow.dev/schemas/android-registration.schema.json",
+  "title": "Agent Workflow Android registration bridge",
+  "type": "object",
+  "required": ["schema_version", "kind", "project_id", "bootstrap_id", "endpoint", "expires_at", "nonce"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"enum": ["android-registration-qr", "android-registration-request", "android-registration-response"]},
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "bootstrap_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{16,128}$"},
+    "device_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,128}$"},
+    "endpoint": {"type": "string", "pattern": "^https://"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "nonce": {"type": "string", "pattern": "^[A-Fa-f0-9]{32,128}$"},
+    "device_public_key": {"type": "string", "minLength": 32, "maxLength": 4096},
+    "capabilities": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "challenge": {"type": "string", "minLength": 16, "maxLength": 4096}
+  },
+  "additionalProperties": false
+}
