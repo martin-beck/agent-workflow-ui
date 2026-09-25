@@ -142,11 +142,11 @@
     },
     {
       "path": "docs/recordings/board-directive-entry.cast",
-      "sha256": "sha256:71f02fd56aade181f760d4d176915c0b00cce061be54dd9c2e63f157b64d2d50"
+      "sha256": "sha256:ae3a4196143cb1ed37a97914ea9cdff15b3971a37a359177b6f3e10f7037e8e3"
     },
     {
       "path": "docs/recordings/cancel-after-review.cast",
-      "sha256": "sha256:3f26463e44d93da484506ca611766a48abeab590c97a64001f3e28e4b1cf8e32"
+      "sha256": "sha256:1fa16b2f3934b9ce9617a2d36672823b5886037b8c5f0303a3353c1b1455f3df"
     },
     {
       "path": "docs/recordings/clarify-ownership.cast",
@@ -154,7 +154,7 @@
     },
     {
       "path": "docs/recordings/company-dashboard.cast",
-      "sha256": "sha256:7c6963550514dda562282986eaf03b613786270ac0814bd38a11c2f6043d6962"
+      "sha256": "sha256:30f7e2fd79bf3c65b6d991364bc079224e6896c19a842ba489e1b8f4fba812ef"
     },
     {
       "path": "docs/recordings/escape-exit.cast",
@@ -166,7 +166,7 @@
     },
     {
       "path": "docs/recordings/explicit-document-views.cast",
-      "sha256": "sha256:d01e89ec0832b180b2ca9c75e0f07acf0116b8fc6228fd8f98e52e67d1f0f80b"
+      "sha256": "sha256:4ec670f74854857ac191e665922c5a62ed0465c155980b3840dcc635e0e8a39a"
     },
     {
       "path": "docs/recordings/full-contest.cast",
@@ -174,7 +174,7 @@
     },
     {
       "path": "docs/recordings/hierarchy-drill-down.cast",
-      "sha256": "sha256:4c8104d2ee588ac175e6ba8f5f3a28aa4571b0ff4c9a9a2b0dd62cc4f3cb5054"
+      "sha256": "sha256:2ff55bb86de86f5b384cf9bc9553f35e62673e99f1df718eff83ddba74e2419f"
     },
     {
       "path": "docs/recordings/more-evidence.cast",
@@ -186,7 +186,7 @@
     },
     {
       "path": "docs/recordings/navigate-documents.cast",
-      "sha256": "sha256:fb2cfb36e22a7624ee2126cc1bcaf1c7c22ca30ea028b983d78ba4df031d7301"
+      "sha256": "sha256:0646d8c485731cd9acabda5a9dae3c4181857bdc0d7b249ad913a020f2630141"
     },
     {
       "path": "docs/recordings/pause-resume-session.cast",
@@ -198,7 +198,7 @@
     },
     {
       "path": "docs/recordings/proposal-with-navigation.cast",
-      "sha256": "sha256:2c0e42682fa6daac37f9cd219927d78921e4dbc454c7f105d822629be7c82f28"
+      "sha256": "sha256:262af4d2b25f6585b1f12b519041d281a75b274a046eba07ef379c33d5758079"
     },
     {
       "path": "docs/recordings/reask-after-gap.cast",
