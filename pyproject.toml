@@ -11,6 +11,7 @@ dependencies = ["prompt-toolkit==3.0.51", "rich==14.2.0"]
 
 [project.optional-dependencies]
 gui = ["PySide6==6.8.2"]
+android = ["qrcode==8.2"]
 # Used by the scenario generator/CI to validate and play generated terminal
 # animations. The committed recordings use asciinema v2 cast format.
 capture = ["asciinema==2.4.0"]
@@ -22,6 +23,7 @@ awui-connect = "awtui.connect:main"
 awui = "awtui.shortcut:main"
 awui-token = "awtui.tokenctl:main"
 awui-android-service = "awtui.android_server:main"
+awui-android-register = "awtui.android_register:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
