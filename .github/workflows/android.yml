@@ -40,6 +40,20 @@ jobs:
           sha256sum -c "$apk.sha256"
           printf 'commit=%s\nabi=%s\njava=%s\ngradle=%s\n' "$GITHUB_SHA" "${{ matrix.abi }}" "$(java -version 2>&1 | head -1)" "$(./gradlew --version | awk '/Gradle / {print $2; exit}')" > "${apk%.apk}-build-metadata.txt"
           ./gradlew --no-daemon :app:dependencies --configuration debugRuntimeClasspath > "${apk%.apk}-runtime-dependencies.txt"
+          apk_sha=$(sha256sum "$apk" | awk '{print $1}')
+          python3 - "$apk_sha" "${{ matrix.abi }}" > "${apk%.apk}-sbom.spdx.json" <<'PY'
+          import json, sys
+          digest, abi = sys.argv[1:]
+          print(json.dumps({
+              "spdxVersion": "SPDX-2.3", "dataLicense": "CC0-1.0",
+              "SPDXID": "SPDXRef-DOCUMENT", "name": "agent-workflow-ui-android-debug",
+              "documentNamespace": "https://github.com/martin-beck/agent-workflow-ui/android/" + abi,
+              "creationInfo": {"created": "${{ github.run_started_at }}", "creators": ["Tool: agent-workflow-ui-ci"]},
+              "packages": [{"SPDXID": "SPDXRef-Package-app", "name": "agent-workflow-ui-debug-apk",
+                  "versionInfo": "${GITHUB_SHA}", "downloadLocation": "NOASSERTION",
+                  "checksums": [{"algorithm": "SHA256", "checksumValue": digest}], "filesAnalyzed": False}]
+          }, sort_keys=True))
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: agent-workflow-ui-debug-apk-${{ matrix.abi }}
@@ -48,6 +62,7 @@ jobs:
             android/app/build/outputs/apk/debug/*.sha256
             android/app/build/outputs/apk/debug/*build-metadata.txt
             android/app/build/outputs/apk/debug/*runtime-dependencies.txt
+            android/app/build/outputs/apk/debug/*sbom.spdx.json
             android/app/build/test-results/testDebugUnitTest/**
             android/app/build/reports/lint-results-debug.html
           if-no-files-found: error
