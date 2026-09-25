@@ -3,7 +3,6 @@ package com.example.agentworkflowui.data
 import junit.framework.TestCase.assertEquals
 import junit.framework.TestCase.assertNotNull
 import junit.framework.TestCase.assertNull
-import org.json.JSONObject
 import org.junit.Test
 
 class EventJournalTest {
@@ -40,7 +39,7 @@ class EventJournalTest {
     // Recreate the journal to model an app process death between send and ack.
     val retry = EventJournal(storage).pending("session").single()
     assertEquals(pending.sequence, retry.sequence)
-    assertEquals(pending.event.toString(), retry.event.toString())
+    assertEquals(pending.event, retry.event)
     EventJournal(storage).acknowledge("session", retry.sequence)
     assertEquals(emptyList<EventJournal.Pending>(), EventJournal(storage).pending("session"))
   }
@@ -54,7 +53,16 @@ class EventJournalTest {
     assertEquals(2, edited.sequence)
   }
 
+  @Test
+  fun sameDecisionAndAnswerOnNewRevisionGetsAnEvent() {
+    val journal = EventJournal(Memory())
+    journal.reserve("session", "D-1", "A", binding = "1:sha256:a") { event(it, "D-1", "A") }
+    journal.acknowledge("session", 1)
+    val next = journal.reserve("session", "D-1", "A", binding = "2:sha256:b") { event(it, "D-1", "A") }
+    assertNotNull(next)
+    assertEquals(2, next!!.sequence)
+  }
+
   private fun event(sequence: Int, decisionId: String, answer: String) =
-    JSONObject().put("sequence", sequence).put("payload",
-      JSONObject().put("decision_id", decisionId).put("answer", answer))
+    "{\"sequence\":$sequence,\"payload\":{\"decision_id\":\"$decisionId\",\"answer\":\"$answer\"}}"
 }
