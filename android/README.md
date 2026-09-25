@@ -29,8 +29,9 @@ the x86_64 and arm64-v8a compatibility lanes. Each lane requests an
 ABI-specific split (`app-x86_64-debug.apk` or `app-arm64-v8a-debug.apk`), so
 these artifacts are not universal APKs and must be installed only on a
 compatible device/ABI. Each lane publishes its APK, SHA-256 checksum,
-Gradle/Java metadata, and resolved runtime dependency report. No signing key
-or production credential is used.
+Gradle/Java metadata, resolved runtime dependency report, and an SPDX 2.3 SBOM
+whose package digest binds the artifact. No signing key or production
+credential is used.
 
 The hosted emulator lane uses a pinned API 34 `google_apis` Pixel 2 x86_64 image,
 disables animations, runs the instrumented batch-selection, Save, and
