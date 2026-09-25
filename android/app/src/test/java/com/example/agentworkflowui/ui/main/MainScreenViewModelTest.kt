@@ -18,7 +18,7 @@ class MainScreenViewModelTest {
   @Test
   fun uiState_onItemSaved_isDisplayed() = runTest {
     val viewModel = MainScreenViewModel(FakeMyModelRepository())
-    assertEquals(viewModel.uiState.first(), MainScreenUiState.Loading)
+    assertEquals(MainScreenUiState.Success(listOf("Sample")), viewModel.uiState.first { it is MainScreenUiState.Success })
   }
 }
 
