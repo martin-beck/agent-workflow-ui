@@ -1,11 +1,14 @@
 package com.example.agentworkflowui.data
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import junit.framework.TestCase.assertEquals
 import junit.framework.TestCase.assertNotNull
 import junit.framework.TestCase.assertNull
 import org.json.JSONObject
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class EventJournalTest {
   private class Memory : EventJournal.Storage {
     var value: String? = null
@@ -37,7 +40,6 @@ class EventJournalTest {
     val storage = Memory()
     val journal = EventJournal(storage)
     val pending = journal.reserve("session", "D-1", "A") { event(it, "D-1", "A") }!!
-    // Recreate the journal to model an app process death between send and ack.
     val retry = EventJournal(storage).pending("session").single()
     assertEquals(pending.sequence, retry.sequence)
     assertEquals(pending.event.toString(), retry.event.toString())
