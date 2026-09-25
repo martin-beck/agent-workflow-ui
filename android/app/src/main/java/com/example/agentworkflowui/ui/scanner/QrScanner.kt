@@ -15,6 +15,7 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
 
 @Composable
+@androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
 fun QrScanner(onPayload: (String) -> Unit, modifier: Modifier = Modifier) {
   val owner = LocalLifecycleOwner.current
   AndroidView(modifier = modifier, factory = { context ->
