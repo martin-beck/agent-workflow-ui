@@ -39,3 +39,5 @@ cleanup() { kill "$emulator_pid" 2>/dev/null || true; }; trap cleanup EXIT
 timeout 180s adb wait-for-device
 timeout 180s bash -c 'until [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" == 1 ]]; do sleep 2; done'
 timeout 12m ./gradlew --no-daemon :app:connectedDebugAndroidTest --stacktrace
+mkdir -p "$repo_root/android/build/connected-artifacts"
+adb exec-out screencap -p > "$repo_root/android/build/connected-artifacts/emulator-workspace.png"

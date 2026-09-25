@@ -34,6 +34,18 @@ Run the same emulator qualification used by the local Actions workflow:
 tools/awui-android-runner.sh e2e
 ```
 
+When Docker is available, the complete qualification can run without a host
+Android SDK. The image is pinned to JDK 17, API 34, and the x86_64 Google APIs
+system image:
+
+```sh
+tools/android-ci-local.sh --docker
+```
+
+Use `--build-only` for unit tests, lint, and the debug APK without starting an
+emulator. Docker mode uses `/dev/kvm` when present and otherwise falls back to
+software emulation; both emulator boot and instrumentation are time-bounded.
+
 The command starts only the named `awui-api34` AVD, runs
 `connectedDebugAndroidTest`, saves the emulator log and captures
 `android/build/connected-artifacts/emulator-workspace.png`. It shuts down that
