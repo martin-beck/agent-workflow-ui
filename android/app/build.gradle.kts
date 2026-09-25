@@ -14,6 +14,15 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    val requestedAbi = providers.gradleProperty("awuiAbi").orNull
+    splits {
+        abi {
+            isEnable = requestedAbi != null
+            reset()
+            requestedAbi?.let { include(it) }
+            isUniversalApk = false
+        }
+    }
 
     buildTypes {
         release {
