@@ -43,16 +43,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.agentworkflowui.data.AndroidBridgeClient
 import com.example.agentworkflowui.data.DeviceIdentity
+import com.example.agentworkflowui.data.RegistrationStore
 import com.example.agentworkflowui.ui.scanner.QrScanner
 import com.example.agentworkflowui.theme.AgentWorkflowUITheme
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +68,22 @@ import org.json.JSONObject
 private data class Decision(val id: String, val title: String, val context: String,
                             val proposals: List<String>, val selected: Int? = null,
                             val own: String = "")
+
+private val decisionSaver = listSaver<List<Decision>, String>(
+  save = { decisions -> decisions.flatMap { decision ->
+    listOf(decision.id, decision.title, decision.context, decision.selected?.toString() ?: "",
+      decision.own, decision.proposals.joinToString("\u001f"))
+  } },
+  restore = { values -> values.chunked(6).mapNotNull { fields ->
+    if (fields.size != 6) null else Decision(fields[0], fields[1], fields[2],
+      fields[5].split("\u001f").filter(String::isNotEmpty), fields[3].toIntOrNull(), fields[4])
+  } }
+)
+
+private fun defaultDecisions() = listOf(
+  Decision("D-1", "Allocator metadata strategy", "Design §2.1", listOf("Inline metadata", "Side metadata")),
+  Decision("D-2", "Benchmark acceptance gate", "Work plan §4", listOf("Strict gate", "Advisory gate")),
+  Decision("D-3", "Rollout and rollback", "Work plan §6", listOf("Canary", "Immediate")))
 
 private fun decisionsFromBatch(batch: JSONObject): List<Decision> {
   val values = batch.optJSONArray("decisions") ?: return emptyList()
@@ -94,23 +115,19 @@ fun WorkflowApp() {
     var packetDigest by remember { mutableStateOf("") }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var showScanner by remember { mutableStateOf(false) }
-    var current by remember { mutableIntStateOf(0) }
-    var tab by remember { mutableIntStateOf(0) }
-    var saved by remember { mutableStateOf(false) }
-    var decisions by remember {
-      mutableStateOf(listOf(
-        Decision("D-1", "Allocator metadata strategy", "Design §2.1", listOf("Inline metadata", "Side metadata")),
-        Decision("D-2", "Benchmark acceptance gate", "Work plan §4", listOf("Strict gate", "Advisory gate")),
-        Decision("D-3", "Rollout and rollback", "Work plan §6", listOf("Canary", "Immediate"))))
-    }
+    var current by rememberSaveable { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var saved by rememberSaveable { mutableStateOf(false) }
+    var decisions by rememberSaveable(stateSaver = decisionSaver) { mutableStateOf(defaultDecisions()) }
     val context = LocalContext.current
     LaunchedEffect(Unit) {
-      val prefs = context.getSharedPreferences("workflow-ui-registration", 0)
-      endpoint = prefs.getString("endpoint", "") ?: ""
-      projectId = prefs.getString("project_id", "") ?: ""
-      deviceId = prefs.getString("device_id", "") ?: ""
-      credential = prefs.getString("credential", "") ?: ""
-      registered = endpoint.isNotBlank() && deviceId.isNotBlank() && credential.isNotBlank()
+      RegistrationStore(context).load()?.let { registration ->
+        projectId = registration.projectId
+        endpoint = registration.endpoint
+        deviceId = registration.deviceId
+        credential = registration.credential
+        registered = true
+      }
     }
     LaunchedEffect(registered, endpoint, deviceId, credential) {
       if (!registered) return@LaunchedEffect
@@ -123,7 +140,10 @@ fun WorkflowApp() {
             taskRevision = batch.optInt("task_revision")
             packetDigest = batch.optString("packet_digest")
             val live = decisionsFromBatch(batch)
-            if (live.isNotEmpty()) decisions = live
+            if (live.isNotEmpty()) {
+              decisions = live
+              current = current.coerceAtMost(live.lastIndex)
+            }
           }
         }.onFailure { connectionState = "Reconnect pending" }
         kotlinx.coroutines.delay(5_000)
@@ -142,7 +162,9 @@ fun WorkflowApp() {
           horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
           Text("Batch: AR decisions", fontWeight = FontWeight.Bold)
           Row {
-            OutlinedButton(onClick = { showScanner = true }) { Text(if (registered) "Replace phone" else "Register phone") }
+            OutlinedButton(onClick = { showScanner = true }, modifier = Modifier.semantics {
+              contentDescription = if (registered) "Replace registered phone" else "Register this phone"
+            }) { Text(if (registered) "Replace phone" else "Register phone") }
             Spacer(Modifier.width(8.dp))
             Button(onClick = {
               if (!registered || sessionId.isBlank() || packetDigest.isBlank()) {
@@ -151,27 +173,43 @@ fun WorkflowApp() {
                 scope.launch {
                   runCatching {
                     withContext(Dispatchers.IO) {
-                      decisions.forEachIndexed { index, decision ->
+                      val journal = RegistrationStore(context).eventJournal()
+                      decisions.forEach { decision ->
                         val answer = decision.own.ifBlank {
-                          decision.selected?.let { decision.proposals[it] } ?: return@forEachIndexed
+                          decision.selected?.let { decision.proposals[it] } ?: return@forEach
                         }
-                        val event = JSONObject().put("schema_version", "1.0")
-                          .put("kind", "android-decision-event").put("project_id", projectId)
-                          .put("session_id", sessionId).put("task_revision", taskRevision)
-                          .put("packet_digest", packetDigest).put("sequence", index + 1)
-                          .put("event_type", "select")
-                          .put("payload", JSONObject().put("decision_id", decision.id).put("answer", answer))
-                        AndroidBridgeClient(endpoint).sendEvent(deviceId, credential, event)
+                        journal.reserve(sessionId, decision.id, answer,
+                          binding = "$taskRevision:$packetDigest") { sequence ->
+                          JSONObject().put("schema_version", "1.0")
+                            .put("kind", "android-decision-event").put("project_id", projectId)
+                            .put("session_id", sessionId).put("task_revision", taskRevision)
+                            .put("packet_digest", packetDigest).put("sequence", sequence)
+                            .put("event_type", "select")
+                            .put("payload", JSONObject().put("decision_id", decision.id).put("answer", answer))
+                            .toString()
+                        }
+                      }
+                      val client = AndroidBridgeClient(endpoint)
+                      // Send every durable outbox item in sequence order. A retry
+                      // uses the exact same sequence and payload and is accepted
+                      // idempotently by AndroidDeviceRegistry.
+                      journal.pending(sessionId).forEach { pending ->
+                        client.sendEvent(deviceId, credential, JSONObject(pending.event))
+                        journal.acknowledge(sessionId, pending.sequence)
                       }
                     }
                   }.onSuccess { saved = true }.onFailure { connectionState = "Save failed; retry" }
                 }
               }
+            }, modifier = Modifier.semantics {
+              contentDescription = if (saved) "Decisions saved" else "Save selected decisions"
             }) { Text(if (saved) "Saved" else "Save") }
           }
         }
         Text("${decisions.count { it.selected != null || it.own.isNotBlank() }} / ${decisions.size} decisions answered",
-          modifier = Modifier.padding(horizontal = 12.dp), color = MaterialTheme.colorScheme.primary)
+          modifier = Modifier.padding(horizontal = 12.dp).semantics {
+            contentDescription = "Decision progress: ${decisions.count { it.selected != null || it.own.isNotBlank() }} of ${decisions.size} answered"
+          }, color = MaterialTheme.colorScheme.primary)
         Row(Modifier.fillMaxWidth().height(230.dp).padding(12.dp)) {
           LazyColumn(Modifier.weight(0.38f)) {
             items(decisions) { decision ->
@@ -181,14 +219,18 @@ fun WorkflowApp() {
                   Text(if (decision.selected != null || decision.own.isNotBlank()) "✓ ${decision.title}" else decision.title,
                     fontWeight = if (index == current) FontWeight.Bold else FontWeight.Normal,
                     color = if (index == current) MaterialTheme.colorScheme.primary else Color.Unspecified)
-                  Text(decision.context, style = MaterialTheme.typography.labelSmall)
+                  Text(decision.context, style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.semantics { contentDescription = "Decision context: ${decision.context}" })
                 }
               }
             }
           }
           Spacer(Modifier.width(8.dp))
           Column(Modifier.weight(0.62f).verticalScroll(rememberScrollState())) {
-            Text(if (tab == 0) "DESIGN DOCUMENT" else "WORK PLAN", fontWeight = FontWeight.Bold)
+            Text(if (tab == 0) "DESIGN DOCUMENT" else "WORK PLAN", fontWeight = FontWeight.Bold,
+              modifier = Modifier.semantics {
+                contentDescription = "Rendered ${if (tab == 0) "design document" else "work plan"}"
+              })
             Spacer(Modifier.height(6.dp))
             Text(if (tab == 0) "# Design document\n\n## 2.1 Decisions\n\n${active.context}\n\n${active.title} is highlighted here.\n\nThe complete Markdown document is rendered in this pane; the active anchor remains visible when the decision changes."
             else "# Work plan\n\n## 4. Delivery gates\n\n${active.context}\n\n${active.title} is highlighted here.\n\nDependencies, evidence, and rollback notes remain available while selecting proposals.")
@@ -203,12 +245,16 @@ fun WorkflowApp() {
             FilterChip(selected = active.selected == index, onClick = {
               decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = index, own = "") else value }
               saved = false
-            }, label = { Text(proposal) }, modifier = Modifier.padding(end = 8.dp))
+            }, label = { Text(proposal) }, modifier = Modifier.padding(end = 8.dp).semantics {
+              contentDescription = "Proposal ${index + 1}: $proposal${if (active.selected == index) ", selected" else ""}"
+            })
           }
           OutlinedTextField(value = active.own, onValueChange = { text ->
             decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = null, own = text) else value }
             saved = false
-          }, label = { Text("Own proposal (optional)") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+          }, label = { Text("Own proposal (optional)") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).semantics {
+            contentDescription = "Own proposal editor for ${active.title}"
+          })
           Text("Only the selected proposal is committed. You can revise it before Save.", style = MaterialTheme.typography.bodySmall)
           Spacer(Modifier.height(12.dp))
           HorizontalDivider()
@@ -220,19 +266,16 @@ fun WorkflowApp() {
     if (showScanner) {
       RegistrationDialog(onDismiss = { showScanner = false }, onRegistered = { result ->
         projectId = result.projectId; endpoint = result.endpoint; deviceId = result.deviceId; credential = result.credential
-        context.getSharedPreferences("workflow-ui-registration", 0).edit()
-          .putString("project_id", projectId).putString("endpoint", endpoint).putString("device_id", deviceId)
-          .putString("credential", credential).apply()
+        RegistrationStore(context).save(RegistrationStore.Registration(
+          projectId, endpoint, deviceId, credential))
         registered = true; showScanner = false
       })
     }
   }
 }
 
-private data class Registration(val projectId: String, val endpoint: String, val deviceId: String, val credential: String)
-
 @Composable
-private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: (Registration) -> Unit) {
+private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: (RegistrationStore.Registration) -> Unit) {
   val context = LocalContext.current
   val scope = androidx.compose.runtime.rememberCoroutineScope()
   var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
@@ -260,7 +303,7 @@ private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: (Registratio
                 AndroidBridgeClient(qr.getString("endpoint")).register(qr, DeviceIdentity.publicKey(), listOf("decisions", "markdown", "audit"))
               }
               require(response.optString("device_id").isNotBlank()) { "service returned no device identity" }
-              onRegistered(Registration(response.getString("project_id"), qr.getString("endpoint"),
+              onRegistered(RegistrationStore.Registration(response.getString("project_id"), qr.getString("endpoint"),
                 response.getString("device_id"), response.getString("credential")))
             } catch (exception: Exception) {
               consent = false

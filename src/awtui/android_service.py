@@ -12,11 +12,18 @@ import json
 import os
 import secrets
 import tempfile
+import threading
+from functools import wraps
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 from .android import registration_qr, registration_request, validate_decision_message
+
+
+def _valid_digest(value: str) -> bool:
+    return len(value) == 71 and value.startswith("sha256:") and all(
+        character in "0123456789abcdefABCDEF" for character in value[7:])
 
 
 def _now() -> datetime:
@@ -31,12 +38,28 @@ def _parse(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _event_digest(message: dict[str, Any]) -> str:
+    """Digest the complete canonical event for idempotent retries."""
+    encoded = json.dumps(message, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _synchronized(method):
+    """Serialize state transitions when the HTTPS adapter handles requests concurrently."""
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return guarded
+
+
 class AndroidDeviceRegistry:
     """Authenticated one-time registration and revision-bound event registry."""
 
     def __init__(self, state_path: str | Path, *, clock: Callable[[], datetime] = _now) -> None:
         self.state_path = Path(state_path)
         self.clock = clock
+        self._lock = threading.RLock()
         self.state = self._load()
 
     def _load(self) -> dict[str, Any]:
@@ -61,6 +84,7 @@ class AndroidDeviceRegistry:
             if os.path.exists(temporary):
                 os.unlink(temporary)
 
+    @_synchronized
     def create_bootstrap(self, *, project_id: str, endpoint: str, ttl_seconds: int = 300) -> dict[str, Any]:
         if not 30 <= ttl_seconds <= 900:
             raise ValueError("bootstrap TTL must be between 30 and 900 seconds")
@@ -74,6 +98,7 @@ class AndroidDeviceRegistry:
         self._save()
         return payload
 
+    @_synchronized
     def redeem(self, payload: dict[str, Any], *, device_public_key: str,
                capabilities: list[str]) -> dict[str, Any]:
         request = registration_request(payload, device_public_key=device_public_key,
@@ -87,16 +112,20 @@ class AndroidDeviceRegistry:
             raise ValueError("registration bootstrap binding mismatch")
         device_id = "android-" + secrets.token_urlsafe(12)
         credential = secrets.token_urlsafe(32)
+        credential_expires = _iso(self.clock() + timedelta(days=30))
         self.state["bootstraps"][request["bootstrap_id"]]["redeemed"] = True
         self.state["devices"][device_id] = {"project_id": request["project_id"],
             "public_key": device_public_key, "capabilities": request["capabilities"],
             "credential_digest": hashlib.sha256(credential.encode()).hexdigest(),
-            "revoked": False, "last_sequence": 0, "last_seen": _iso(self.clock())}
+            "revoked": False, "last_sequence": 0, "sessions": {},
+            "last_seen": _iso(self.clock()),
+            "credential_expires_at": credential_expires}
         self._save()
         return {"schema_version": "1.0", "kind": "android-registration-response",
                 "project_id": request["project_id"], "device_id": device_id,
-                "credential": credential, "expires_at": request["expires_at"]}
+                "credential": credential, "expires_at": credential_expires}
 
+    @_synchronized
     def revoke(self, device_id: str) -> None:
         device = self.state["devices"].get(device_id)
         if not device:
@@ -104,6 +133,7 @@ class AndroidDeviceRegistry:
         device["revoked"] = True
         self._save()
 
+    @_synchronized
     def publish_batch(self, *, project_id: str, batch: dict[str, Any]) -> None:
         """Publish the authoritative pending batch for registered Android clients.
 
@@ -118,13 +148,29 @@ class AndroidDeviceRegistry:
             raise ValueError("batch missing required fields: " + ", ".join(missing))
         if not isinstance(batch["decisions"], list):
             raise ValueError("batch decisions must be a list")
+        if not isinstance(batch["session_id"], str) or not batch["session_id"]:
+            raise ValueError("batch session_id must be a non-empty string")
+        if not isinstance(batch["task_revision"], int) or batch["task_revision"] < 1:
+            raise ValueError("batch task_revision must be a positive integer")
+        if not isinstance(batch["packet_digest"], str) or not _valid_digest(batch["packet_digest"]):
+            raise ValueError("batch packet_digest is invalid")
+        if not all(isinstance(batch[key], str) for key in ("design_markdown", "workplan_markdown")):
+            raise ValueError("batch documents must be Markdown strings")
+        for decision in batch["decisions"]:
+            if not isinstance(decision, dict) or not decision.get("id"):
+                raise ValueError("batch contains an invalid decision")
+            if not isinstance(decision.get("proposals", []), list):
+                raise ValueError("decision proposals must be a list")
         self.state.setdefault("batches", {})[project_id] = json.loads(json.dumps(batch))
         self._save()
 
+    @_synchronized
     def get_batch(self, *, device_id: str, credential: str) -> dict[str, Any] | None:
         device = self.state["devices"].get(device_id)
         if not device or device["revoked"]:
             raise ValueError("Android device is not registered")
+        if _parse(device.get("credential_expires_at", "9999-12-31T00:00:00Z")) <= self.clock():
+            raise ValueError("Android device credential has expired")
         digest = hashlib.sha256(credential.encode()).hexdigest()
         if not secrets.compare_digest(digest, device["credential_digest"]):
             raise ValueError("invalid Android device credential")
@@ -132,25 +178,50 @@ class AndroidDeviceRegistry:
         self._save()
         return self.state.setdefault("batches", {}).get(device["project_id"])
 
+    @_synchronized
     def route_event(self, *, device_id: str, credential: str, message: dict[str, Any],
                     project_id: str, session_id: str, task_revision: int,
                     packet_digest: str) -> dict[str, Any]:
         device = self.state["devices"].get(device_id)
         if not device or device["revoked"] or device["project_id"] != project_id:
             raise ValueError("Android device is not registered for this project")
+        if _parse(device.get("credential_expires_at", "9999-12-31T00:00:00Z")) <= self.clock():
+            raise ValueError("Android device credential has expired")
         digest = hashlib.sha256(credential.encode()).hexdigest()
         if not secrets.compare_digest(digest, device["credential_digest"]):
             raise ValueError("invalid Android device credential")
         validate_decision_message(message, project_id=project_id, session_id=session_id,
                                   task_revision=task_revision, packet_digest=packet_digest,
                                   device_id=device_id)
-        if message["sequence"] <= device["last_sequence"]:
+        # Sequence numbers are monotonic within a session, not tied to the
+        # decision's array index.  Persist the accepted message digest so a
+        # lost acknowledgement can be retried safely without duplicating the
+        # Coordinator event.  A reused sequence with different content is a
+        # fail-closed collision.
+        sessions = device.setdefault("sessions", {})
+        session = sessions.setdefault(session_id, {"last_sequence": 0, "events": {}})
+        sequence = message["sequence"]
+        digest = _event_digest(message)
+        previous = session["events"].get(str(sequence))
+        if previous is not None:
+            if previous != digest:
+                raise ValueError("Android event sequence collision")
+            device["last_seen"] = _iso(self.clock())
+            self._save()
+            return {"schema_version": "1.0", "kind": "android-ack", "project_id": project_id,
+                    "device_id": device_id, "session_id": session_id,
+                    "task_revision": task_revision, "packet_digest": packet_digest,
+                    "sequence": sequence, "idempotent": True}
+        if sequence <= session["last_sequence"]:
             raise ValueError("replayed Android event sequence")
-        device["last_sequence"] = message["sequence"]
+        session["last_sequence"] = sequence
+        session["events"][str(sequence)] = digest
+        # Retain the legacy aggregate for older state readers and diagnostics.
+        device["last_sequence"] = max(device.get("last_sequence", 0), sequence)
         device["last_seen"] = _iso(self.clock())
         self.state["events"].append({"device_id": device_id, "message": message})
         self._save()
         return {"schema_version": "1.0", "kind": "android-ack", "project_id": project_id,
                 "device_id": device_id, "session_id": session_id,
                 "task_revision": task_revision, "packet_digest": packet_digest,
-                "sequence": message["sequence"]}
+                "sequence": message["sequence"], "idempotent": False}

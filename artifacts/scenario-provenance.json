@@ -386,7 +386,7 @@
       },
       {
         "path": "src/awtui/android_service.py",
-        "sha256": "sha256:8c81fde53213dd92cc83651b8696e0bdcfaa863cca3d10fcc5ae8996b2c1c902"
+        "sha256": "sha256:a7a44c31150b210cd95ae595e15e08ba46d4cd4169c076a144f1e2f3fcc78a4a"
       },
       {
         "path": "src/awtui/app.py",
@@ -521,7 +521,7 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:20c6e5038081e686abaa5c876cad96b98f3e6ce4df11b6e4a2ab24362247417c"
+    "version": "sha256:eebd1b364163341c5a97cdc79d12724e8c5592acf29bb6dee96d48292ad3ed93"
   },
   "schema_version": 1,
   "source_release": {
