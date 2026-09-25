@@ -7,8 +7,8 @@ This is an unsigned development APK, not a store release. Build it with:
 ```
 
 The APK is written to `app/build/outputs/apk/debug/app-debug.apk` when no ABI
-split is requested. Install it with `adb install -r` or `android install
---apks ...` on a development device.
+split is requested. Install it with `adb install -r` or
+`android install --apks ...` on a development device.
 
 Open **Register phone**, allow camera access, and scan the QR displayed by the
 project-side `awui-android-service`. The app shows the project and HTTPS
