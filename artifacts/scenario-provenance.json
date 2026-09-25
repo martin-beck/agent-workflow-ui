@@ -186,7 +186,7 @@
     },
     {
       "path": "docs/recordings/navigate-documents.cast",
-      "sha256": "sha256:0646d8c485731cd9acabda5a9dae3c4181857bdc0d7b249ad913a020f2630141"
+      "sha256": "sha256:fb2cfb36e22a7624ee2126cc1bcaf1c7c22ca30ea028b983d78ba4df031d7301"
     },
     {
       "path": "docs/recordings/pause-resume-session.cast",
@@ -386,7 +386,7 @@
       },
       {
         "path": "src/awtui/android_service.py",
-        "sha256": "sha256:25b480bb5909aecf3810302b06c8e71e7804be1b44e2616f80e63ac82d3a8e85"
+        "sha256": "sha256:a7a44c31150b210cd95ae595e15e08ba46d4cd4169c076a144f1e2f3fcc78a4a"
       },
       {
         "path": "src/awtui/app.py",
@@ -521,7 +521,7 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:a6a84d5dd264cc3ce63c07280045713656c67b698fd4ddb89f527b14f730fcb6"
+    "version": "sha256:eebd1b364163341c5a97cdc79d12724e8c5592acf29bb6dee96d48292ad3ed93"
   },
   "schema_version": 1,
   "source_release": {

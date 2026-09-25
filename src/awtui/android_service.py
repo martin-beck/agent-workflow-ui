@@ -12,6 +12,8 @@ import json
 import os
 import secrets
 import tempfile
+import threading
+from functools import wraps
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -42,12 +44,22 @@ def _event_digest(message: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _synchronized(method):
+    """Serialize state transitions when the HTTPS adapter handles requests concurrently."""
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return guarded
+
+
 class AndroidDeviceRegistry:
     """Authenticated one-time registration and revision-bound event registry."""
 
     def __init__(self, state_path: str | Path, *, clock: Callable[[], datetime] = _now) -> None:
         self.state_path = Path(state_path)
         self.clock = clock
+        self._lock = threading.RLock()
         self.state = self._load()
 
     def _load(self) -> dict[str, Any]:
@@ -72,6 +84,7 @@ class AndroidDeviceRegistry:
             if os.path.exists(temporary):
                 os.unlink(temporary)
 
+    @_synchronized
     def create_bootstrap(self, *, project_id: str, endpoint: str, ttl_seconds: int = 300) -> dict[str, Any]:
         if not 30 <= ttl_seconds <= 900:
             raise ValueError("bootstrap TTL must be between 30 and 900 seconds")
@@ -85,6 +98,7 @@ class AndroidDeviceRegistry:
         self._save()
         return payload
 
+    @_synchronized
     def redeem(self, payload: dict[str, Any], *, device_public_key: str,
                capabilities: list[str]) -> dict[str, Any]:
         request = registration_request(payload, device_public_key=device_public_key,
@@ -111,6 +125,7 @@ class AndroidDeviceRegistry:
                 "project_id": request["project_id"], "device_id": device_id,
                 "credential": credential, "expires_at": credential_expires}
 
+    @_synchronized
     def revoke(self, device_id: str) -> None:
         device = self.state["devices"].get(device_id)
         if not device:
@@ -118,6 +133,7 @@ class AndroidDeviceRegistry:
         device["revoked"] = True
         self._save()
 
+    @_synchronized
     def publish_batch(self, *, project_id: str, batch: dict[str, Any]) -> None:
         """Publish the authoritative pending batch for registered Android clients.
 
@@ -148,6 +164,7 @@ class AndroidDeviceRegistry:
         self.state.setdefault("batches", {})[project_id] = json.loads(json.dumps(batch))
         self._save()
 
+    @_synchronized
     def get_batch(self, *, device_id: str, credential: str) -> dict[str, Any] | None:
         device = self.state["devices"].get(device_id)
         if not device or device["revoked"]:
@@ -161,6 +178,7 @@ class AndroidDeviceRegistry:
         self._save()
         return self.state.setdefault("batches", {}).get(device["project_id"])
 
+    @_synchronized
     def route_event(self, *, device_id: str, credential: str, message: dict[str, Any],
                     project_id: str, session_id: str, task_revision: int,
                     packet_digest: str) -> dict[str, Any]:

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -106,3 +107,18 @@ def test_same_sequence_with_changed_answer_is_rejected(tmp_path):
         registry.route_event(device_id=response["device_id"], credential=response["credential"],
                              message=changed, project_id="p", session_id="sparse",
                              task_revision=2, packet_digest=message["packet_digest"])
+
+
+def test_concurrent_retries_are_serialized_and_recorded_once(tmp_path):
+    registry = AndroidDeviceRegistry(tmp_path / "service.json")
+    response, message = _device_and_message(registry, sequence=1)
+
+    def submit(_):
+        return registry.route_event(device_id=response["device_id"], credential=response["credential"],
+                                    message=message, project_id="p", session_id="sparse",
+                                    task_revision=2, packet_digest=message["packet_digest"])
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        acknowledgements = list(pool.map(submit, range(32)))
+    assert sum(ack["idempotent"] is False for ack in acknowledgements) == 1
+    assert len(registry.state["events"]) == 1
