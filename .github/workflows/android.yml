@@ -54,7 +54,7 @@ jobs:
   emulator-e2e:
     name: Android emulator E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     needs: android-build
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +82,7 @@ jobs:
             adb shell settings put global transition_animation_scale 0
             adb shell settings put global animator_duration_scale 0
             cd android
-            ./gradlew --no-daemon :app:connectedDebugAndroidTest --stacktrace
+            timeout 12m ./gradlew --no-daemon :app:connectedDebugAndroidTest --stacktrace
             mkdir -p build/connected-artifacts
             adb exec-out screencap -p > build/connected-artifacts/emulator-workspace.png
       - name: Upload emulator test reports
