@@ -37,6 +37,11 @@ cross-AR, skipped-gate, or incomplete events fail closed.
 See [`docs/AR_TUI_INTERACTION.md`](docs/AR_TUI_INTERACTION.md) and the formal
 state model in [`specifications/tui-lifecycle.json`](specifications/tui-lifecycle.json).
 
+Android emulator qualification can also run on a private Linux self-hosted
+runner. Use [`docs/LOCAL_ANDROID_RUNNER.md`](docs/LOCAL_ANDROID_RUNNER.md) and
+`tools/awui-android-runner.sh bootstrap` for the one-time SDK/AVD setup; the
+manual local-runner workflow is intentionally protected from pull requests.
+
 For a Coordinator-created human handoff, run the private session request with
 `awtui-live --session-file PATH`. See
 [`docs/HOST_HANDOFF.md`](docs/HOST_HANDOFF.md) for local, tmux, SSH, resume,

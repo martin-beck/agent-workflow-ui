@@ -1,6 +1,7 @@
 name: Android development APK
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths: ["android/**", "src/awtui/android*.py", "tests/test_android*.py", ".github/workflows/android.yml"]
@@ -11,8 +12,14 @@ permissions:
   contents: read
 
 jobs:
-  debug-apk:
+  android-build:
+    name: Android build (${{ matrix.abi }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [x86_64, arm64-v8a]
     defaults:
       run:
         working-directory: android
@@ -23,9 +30,67 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :app:testDebugUnitTest :app:assembleDebug
+      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug -PawuiAbi=${{ matrix.abi }}
+        env:
+          ANDROID_ABI: ${{ matrix.abi }}
+      - name: Generate checksum and build metadata
+        run: |
+          apk=$(find app/build/outputs/apk/debug -name 'app-*-debug.apk' -print -quit)
+          sha256sum "$apk" > "$apk.sha256"
+          sha256sum -c "$apk.sha256"
+          printf 'commit=%s\nabi=%s\njava=%s\ngradle=%s\n' "$GITHUB_SHA" "${{ matrix.abi }}" "$(java -version 2>&1 | head -1)" "$(./gradlew --version | awk '/Gradle / {print $2; exit}')" > "${apk%.apk}-build-metadata.txt"
+          ./gradlew --no-daemon :app:dependencies --configuration debugRuntimeClasspath > "${apk%.apk}-runtime-dependencies.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: agent-workflow-ui-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: agent-workflow-ui-debug-apk-${{ matrix.abi }}
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/debug/*.sha256
+            android/app/build/outputs/apk/debug/*build-metadata.txt
+            android/app/build/outputs/apk/debug/*runtime-dependencies.txt
+            android/app/build/test-results/testDebugUnitTest/**
+            android/app/build/reports/lint-results-debug.html
           if-no-files-found: error
+
+  emulator-e2e:
+    name: Android emulator E2E
+    # Hosted emulators are opt-in. Pull requests use the controlled local
+    # runner workflow instead, avoiding unbounded hosted emulator queues.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: android-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run instrumented tests on a pinned emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          force-avd-creation: true
+          cores: 2
+          ram-size: 2048M
+          disk-size: 4096M
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu off
+          disable-animations: false
+          script: |
+            cd android && timeout 12m ./gradlew --no-daemon :app:connectedDebugAndroidTest --stacktrace
+            mkdir -p android/build/connected-artifacts
+            adb exec-out screencap -p > android/build/connected-artifacts/emulator-workspace.png
+      - name: Upload emulator test reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-emulator-e2e-reports
+          if-no-files-found: warn
+          path: |
+            android/app/build/outputs/androidTest-results/**
+            android/app/build/reports/androidTests/**
+            android/build/connected-artifacts/**

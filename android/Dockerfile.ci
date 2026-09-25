@@ -1,0 +1,30 @@
+FROM ubuntu:24.04
+
+ARG CMDLINE_TOOLS_VERSION=11076708
+ENV DEBIAN_FRONTEND=noninteractive \
+    ANDROID_SDK_ROOT=/opt/android-sdk \
+    ANDROID_HOME=/opt/android-sdk \
+    JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 \
+    PATH=/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:/opt/android-sdk/emulator:$PATH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl unzip wget openjdk-17-jdk-headless \
+      libc6-i386 lib32gcc-s1 lib32stdc++6 libpulse0 libglu1-mesa \
+      git procps && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools" \
+ && wget -q "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_VERSION}_latest.zip" -O /tmp/cmdline-tools.zip \
+ && unzip -q /tmp/cmdline-tools.zip -d "${ANDROID_SDK_ROOT}/cmdline-tools" \
+ && mv "${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools" "${ANDROID_SDK_ROOT}/cmdline-tools/latest" \
+ && rm /tmp/cmdline-tools.zip
+
+RUN yes | sdkmanager --licenses >/dev/null \
+ && sdkmanager --verbose \
+      "platform-tools" "emulator" "platforms;android-36" \
+      "build-tools;35.0.0" "system-images;android-34;google_apis;x86_64" \
+ && echo no | avdmanager create avd --force --name awui-api34 --package "system-images;android-34;google_apis;x86_64" --device pixel_2
+
+WORKDIR /workspace
+COPY tools/android-ci-local.sh /usr/local/bin/android-ci-local
+RUN chmod +x /usr/local/bin/android-ci-local
+ENTRYPOINT ["/usr/local/bin/android-ci-local"]
