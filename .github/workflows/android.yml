@@ -74,7 +74,7 @@ jobs:
           cores: 2
           ram-size: 2048M
           disk-size: 4096M
-          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu off
           disable-animations: false
           script: |
             cd android && timeout 12m ./gradlew --no-daemon :app:connectedDebugAndroidTest --stacktrace
