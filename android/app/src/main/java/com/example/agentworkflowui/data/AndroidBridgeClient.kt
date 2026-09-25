@@ -14,8 +14,11 @@ class AndroidBridgeClient(
       .put("capabilities", capabilities))
 
   /** Raw JSON seam used by JVM protocol qualification (Android's JSONObject is not JVM-backed). */
-  fun register(qrJson: String, publicKey: String, capabilities: List<String>): JSONObject =
-    postRaw("/v1/register", "{\"qr\":$qrJson,\"device_public_key\":\"${escape(publicKey)}\",\"capabilities\":[${capabilities.joinToString(",") { \"\\\"${escape(it)}\\\"\" }}]}")
+  fun register(qrJson: String, publicKey: String, capabilities: List<String>): JSONObject {
+    val encodedCapabilities = capabilities.joinToString(",") { "\"${escape(it)}\"" }
+    val body = "{\"qr\":$qrJson,\"device_public_key\":\"${escape(publicKey)}\",\"capabilities\":[$encodedCapabilities]}"
+    return postRaw("/v1/register", body)
+  }
 
   fun sendEvent(deviceId: String, credential: String, event: JSONObject): JSONObject =
     post("/v1/events", event.put("device_id", deviceId), credential)
