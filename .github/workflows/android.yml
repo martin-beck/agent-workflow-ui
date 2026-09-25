@@ -77,10 +77,9 @@ jobs:
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
           disable-animations: false
           script: |
-            cd android
-            timeout 12m ./gradlew --no-daemon :app:connectedDebugAndroidTest --stacktrace
-            mkdir -p build/connected-artifacts
-            adb exec-out screencap -p > build/connected-artifacts/emulator-workspace.png
+            cd android && timeout 12m ./gradlew --no-daemon :app:connectedDebugAndroidTest --stacktrace
+            mkdir -p android/build/connected-artifacts
+            adb exec-out screencap -p > android/build/connected-artifacts/emulator-workspace.png
       - name: Upload emulator test reports
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
