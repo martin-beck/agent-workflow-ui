@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage() { echo 'Usage: tools/android-ci-local.sh [--docker|--native] [--build-only]'; }
+usage() { echo 'Usage: tools/android-ci-local.sh [--docker|--native] [--build-only] (API-34)'; }
 mode=docker; build_only=0
 for arg in "$@"; do
   case "$arg" in
