@@ -31,7 +31,7 @@ class SshTunnelManager(private val connectTimeoutMs: Int = 10_000) {
     require(Regex("SHA256:[A-Za-z0-9+/]{43}").matches(fingerprint))
 
     val jsch = JSch()
-    jsch.addIdentity(DeviceIdentity.jschIdentity())
+    jsch.addIdentity(DeviceIdentity.jschIdentity(), null)
     val session = jsch.getSession(user, host, port)
     session.setConfig("PreferredAuthentications", "publickey")
     session.setConfig("StrictHostKeyChecking", "yes")
@@ -52,7 +52,7 @@ class PinnedHostKeyRepository(private val expectedFingerprint: String) : HostKey
   override fun check(host: String, key: ByteArray): Int {
     val actual = "SHA256:" + Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(key), Base64.NO_WRAP)
       .trimEnd('=')
-    return if (MessageDigest.isEqual(actual.toByteArray(), expectedFingerprint.toByteArray())) OK else CHANGED
+    return if (MessageDigest.isEqual(actual.toByteArray(), expectedFingerprint.toByteArray())) HostKeyRepository.OK else HostKeyRepository.CHANGED
   }
   override fun add(hostkey: HostKey, ui: com.jcraft.jsch.UserInfo?) = Unit
   override fun remove(host: String?, type: String?) = Unit
