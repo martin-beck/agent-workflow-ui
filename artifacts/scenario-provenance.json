@@ -433,6 +433,10 @@
         "sha256": "sha256:cd27cdb9507d2bf3f9dd4c959e213d1df3f04f1da0dd56db86b7fac076c97ceb"
       },
       {
+        "path": "src/awtui/endpoint_discovery.py",
+        "sha256": "sha256:8a213d2815a3d6a7229c15783bd91d8a2aa495569e6dc6e579fd18d61c3590a4"
+      },
+      {
         "path": "src/awtui/graph.py",
         "sha256": "sha256:0871fda311dfae43b9b62ae78d0533c4f58a51ef7d5bc01cb511b447a1a0263c"
       },
@@ -525,7 +529,7 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:764018e85a01dc4c2a83123e3fabdc4108240d35d99355c0e702405644a435bc"
+    "version": "sha256:13057fb9fe02a26c8a2d2bdb0e8278df9b9cfab5c5b6827d3c06299362adb312"
   },
   "schema_version": 1,
   "source_release": {
