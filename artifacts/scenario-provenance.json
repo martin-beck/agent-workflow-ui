@@ -377,6 +377,10 @@
         "sha256": "sha256:e944d04be6371cbd5adc618749f9b78f64c7b64e87d6bd7b023f9d6ecda74bc2"
       },
       {
+        "path": "src/awtui/android_client.py",
+        "sha256": "sha256:7a8d4851bc15789290877244f813c9dfdefb3291329fa4cb459a04bd90bdc294"
+      },
+      {
         "path": "src/awtui/android_register.py",
         "sha256": "sha256:d0c0312f0b272a2aedf14d323b95c5e6c68c5f58f37341b5e4961e1515283cf2"
       },
@@ -521,7 +525,7 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:eebd1b364163341c5a97cdc79d12724e8c5592acf29bb6dee96d48292ad3ed93"
+    "version": "sha256:764018e85a01dc4c2a83123e3fabdc4108240d35d99355c0e702405644a435bc"
   },
   "schema_version": 1,
   "source_release": {
