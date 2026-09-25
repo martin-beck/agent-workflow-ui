@@ -192,6 +192,11 @@ def _run_live_replay(scenario: dict) -> tuple[object, list[str], list[str], str]
         replay_actions = ["down", "up", "right", "left", "tab", "workplan", "design", "page-down", "page-up"] + list(scenario["actions"])
         cast_events: list[list[object]] = []
         elapsed = 0.0
+        # ``pre_run`` fires just before prompt-toolkit's first render.  Give
+        # that render one human-paced tick before injecting the first key so
+        # scheduling differences between hosted and local runners cannot drop
+        # or reorder the initial navigation frame.
+        time.sleep(_HUMAN_DELAY)
         for action in replay_actions:
             for chunk_index, chunk in enumerate(_action_chunks(action)):
                 # Page navigation intentionally focuses the document pane.
