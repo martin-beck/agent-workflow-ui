@@ -32,7 +32,7 @@ compatible device/ABI. Each lane publishes its APK, SHA-256 checksum,
 Gradle/Java metadata, and resolved runtime dependency report. No signing key
 or production credential is used.
 
-The hosted emulator lane uses a pinned API 30 `google_apis` Pixel 2 x86_64 image,
+The hosted emulator lane uses a pinned API 34 `google_apis` Pixel 2 x86_64 image,
 disables animations, runs the instrumented batch-selection, Save, and
 document-tab tests, and uploads the Android test reports and a diagnostic
 screenshot even when a test fails. The lane has a hard timeout so a broken
