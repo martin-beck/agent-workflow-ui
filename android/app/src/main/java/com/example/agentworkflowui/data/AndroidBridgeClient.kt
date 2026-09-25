@@ -13,8 +13,15 @@ class AndroidBridgeClient(
     post("/v1/register", JSONObject().put("qr", qr).put("device_public_key", publicKey)
       .put("capabilities", capabilities))
 
+  /** Raw JSON seam used by JVM protocol qualification (Android's JSONObject is not JVM-backed). */
+  fun register(qrJson: String, publicKey: String, capabilities: List<String>): JSONObject =
+    postRaw("/v1/register", "{\"qr\":$qrJson,\"device_public_key\":\"${escape(publicKey)}\",\"capabilities\":[${capabilities.joinToString(",") { \"\\\"${escape(it)}\\\"\" }}]}")
+
   fun sendEvent(deviceId: String, credential: String, event: JSONObject): JSONObject =
     post("/v1/events", event.put("device_id", deviceId), credential)
+
+  fun sendEvent(deviceId: String, credential: String, eventJson: String): JSONObject =
+    postRaw("/v1/events", eventJson.trimEnd().removeSuffix("}") + ",\"device_id\":\"${escape(deviceId)}\"}", credential)
 
   fun session(deviceId: String, credential: String): JSONObject {
     val response = transport.execute(
@@ -27,6 +34,10 @@ class AndroidBridgeClient(
   }
 
   private fun post(path: String, body: JSONObject, credential: String? = null): JSONObject {
+    return postRaw(path, body.toString(), credential)
+  }
+
+  private fun postRaw(path: String, body: String, credential: String? = null): JSONObject {
     val headers = buildMap {
       put("Content-Type", "application/json")
       credential?.let { put("Authorization", "Bearer $it") }
@@ -43,6 +54,8 @@ class AndroidBridgeClient(
     if (statusCode !in 200..299) error("workflow service rejected $operation request: $body")
     return JSONObject(body)
   }
+
+  private fun escape(value: String): String = value.replace("\\", "\\\\").replace("\"", "\\\"")
 }
 
 /** Minimal transport seam so protocol tests never need a live Android service. */
