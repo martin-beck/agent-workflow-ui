@@ -12,6 +12,7 @@ from .android_service import AndroidDeviceRegistry
 
 class _Handler(BaseHTTPRequestHandler):
     registry: AndroidDeviceRegistry
+    service_key: str = ""
 
     def _json(self, status: int, value: dict[str, Any]) -> None:
         body = json.dumps(value, sort_keys=True).encode()
@@ -33,6 +34,14 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/v1/health":
             self._json(200, {"status": "ok", "service": "agent-workflow-android"})
+        elif self.path == "/v1/session":
+            try:
+                device_id = self.headers.get("X-Device-Id", "")
+                credential = self.headers.get("Authorization", "").removeprefix("Bearer ")
+                batch = self.registry.get_batch(device_id=device_id, credential=credential)
+                self._json(200, {"status": "pending" if batch else "idle", "batch": batch})
+            except (KeyError, TypeError, ValueError) as exc:
+                self._json(401, {"error": str(exc)})
         else:
             self._json(404, {"error": "not-found"})
 
@@ -54,6 +63,13 @@ class _Handler(BaseHTTPRequestHandler):
                                                    packet_digest=body["packet_digest"])
                 self._json(200, result)
                 return
+            if self.path == "/v1/batches":
+                if not self.service_key or self.headers.get("X-Workflow-Service-Key") != self.service_key:
+                    self._json(401, {"error": "invalid service credential"})
+                    return
+                self.registry.publish_batch(project_id=body["project_id"], batch=body["batch"])
+                self._json(202, {"status": "published", "project_id": body["project_id"]})
+                return
             self._json(404, {"error": "not-found"})
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             self._json(400, {"error": str(exc)})
@@ -69,9 +85,10 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--certfile", required=True)
     parser.add_argument("--keyfile", required=True)
+    parser.add_argument("--service-key", default="", help="key required to publish coordinator batches")
     args = parser.parse_args()
     registry = AndroidDeviceRegistry(args.state)
-    handler = type("AndroidHandler", (_Handler,), {"registry": registry})
+    handler = type("AndroidHandler", (_Handler,), {"registry": registry, "service_key": args.service_key})
     server = ThreadingHTTPServer((args.host, args.port), handler)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(args.certfile, args.keyfile)
