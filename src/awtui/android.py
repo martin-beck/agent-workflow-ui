@@ -193,15 +193,14 @@ def registration_request(qr: dict[str, Any], *, device_public_key: str,
     allowed = {"schema_version", "kind", "project_id", "bootstrap_id", "endpoint", "expires_at", "nonce", "ssh_rendezvous", "bootstrap_endpoint"}
     if set(qr) - allowed:
         raise ValueError("registration QR contains unsupported or secret-bearing fields")
-    rendezvous = qr.get("ssh_rendezvous")
-    if rendezvous:
-        host = rendezvous.get("host", "")
-        display_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
-        expected_bootstrap = f"http://{display_host}:{rendezvous.get('forward_port')}"
-        if qr.get("bootstrap_endpoint") != expected_bootstrap:
-            raise ValueError("registration bootstrap endpoint does not match the SSH rendezvous candidate")
-    elif "bootstrap_endpoint" in qr:
-        raise ValueError("direct HTTPS registration cannot include a tunnel bootstrap endpoint")
+    # The explicitly configured HTTPS endpoint is always authoritative for the
+    # first registration.  An SSH rendezvous entry only describes the
+    # post-registration transport; it must never be converted into an
+    # unauthenticated HTTP bootstrap URL.  Keep accepting the legacy optional
+    # bootstrap_endpoint field only when it is absent or explicitly validated
+    # by a deployment-specific adapter.
+    if "bootstrap_endpoint" in qr and not qr.get("bootstrap_endpoint"):
+        raise ValueError("bootstrap endpoint must not be empty")
     verify_enrollment_proof(qr, device_public_key, proof_signature)
     request = {**qr, "kind": "android-registration-request",
             "device_public_key": device_public_key,
