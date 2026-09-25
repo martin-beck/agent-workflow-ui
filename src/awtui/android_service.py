@@ -19,6 +19,11 @@ from typing import Any, Callable
 from .android import registration_qr, registration_request, validate_decision_message
 
 
+def _valid_digest(value: str) -> bool:
+    return len(value) == 71 and value.startswith("sha256:") and all(
+        character in "0123456789abcdefABCDEF" for character in value[7:])
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -87,15 +92,17 @@ class AndroidDeviceRegistry:
             raise ValueError("registration bootstrap binding mismatch")
         device_id = "android-" + secrets.token_urlsafe(12)
         credential = secrets.token_urlsafe(32)
+        credential_expires = _iso(self.clock() + timedelta(days=30))
         self.state["bootstraps"][request["bootstrap_id"]]["redeemed"] = True
         self.state["devices"][device_id] = {"project_id": request["project_id"],
             "public_key": device_public_key, "capabilities": request["capabilities"],
             "credential_digest": hashlib.sha256(credential.encode()).hexdigest(),
-            "revoked": False, "last_sequence": 0, "last_seen": _iso(self.clock())}
+            "revoked": False, "last_sequence": 0, "last_seen": _iso(self.clock()),
+            "credential_expires_at": credential_expires}
         self._save()
         return {"schema_version": "1.0", "kind": "android-registration-response",
                 "project_id": request["project_id"], "device_id": device_id,
-                "credential": credential, "expires_at": request["expires_at"]}
+                "credential": credential, "expires_at": credential_expires}
 
     def revoke(self, device_id: str) -> None:
         device = self.state["devices"].get(device_id)
@@ -118,6 +125,19 @@ class AndroidDeviceRegistry:
             raise ValueError("batch missing required fields: " + ", ".join(missing))
         if not isinstance(batch["decisions"], list):
             raise ValueError("batch decisions must be a list")
+        if not isinstance(batch["session_id"], str) or not batch["session_id"]:
+            raise ValueError("batch session_id must be a non-empty string")
+        if not isinstance(batch["task_revision"], int) or batch["task_revision"] < 1:
+            raise ValueError("batch task_revision must be a positive integer")
+        if not isinstance(batch["packet_digest"], str) or not _valid_digest(batch["packet_digest"]):
+            raise ValueError("batch packet_digest is invalid")
+        if not all(isinstance(batch[key], str) for key in ("design_markdown", "workplan_markdown")):
+            raise ValueError("batch documents must be Markdown strings")
+        for decision in batch["decisions"]:
+            if not isinstance(decision, dict) or not decision.get("id"):
+                raise ValueError("batch contains an invalid decision")
+            if not isinstance(decision.get("proposals", []), list):
+                raise ValueError("decision proposals must be a list")
         self.state.setdefault("batches", {})[project_id] = json.loads(json.dumps(batch))
         self._save()
 
@@ -125,6 +145,8 @@ class AndroidDeviceRegistry:
         device = self.state["devices"].get(device_id)
         if not device or device["revoked"]:
             raise ValueError("Android device is not registered")
+        if _parse(device.get("credential_expires_at", "9999-12-31T00:00:00Z")) <= self.clock():
+            raise ValueError("Android device credential has expired")
         digest = hashlib.sha256(credential.encode()).hexdigest()
         if not secrets.compare_digest(digest, device["credential_digest"]):
             raise ValueError("invalid Android device credential")
@@ -138,6 +160,8 @@ class AndroidDeviceRegistry:
         device = self.state["devices"].get(device_id)
         if not device or device["revoked"] or device["project_id"] != project_id:
             raise ValueError("Android device is not registered for this project")
+        if _parse(device.get("credential_expires_at", "9999-12-31T00:00:00Z")) <= self.clock():
+            raise ValueError("Android device credential has expired")
         digest = hashlib.sha256(credential.encode()).hexdigest()
         if not secrets.compare_digest(digest, device["credential_digest"]):
             raise ValueError("invalid Android device credential")
