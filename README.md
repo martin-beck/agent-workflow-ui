@@ -1,7 +1,7 @@
 # Agent Workflow UI
 
-Release line: **v0.6.4** (SSH rendezvous discovery, consented Android tunnel
-enrollment, cross-platform qualification, and immutable compatibility gates).
+Release line: **v0.6.5** (automatic HTTPS service startup during Android
+pairing, SSH rendezvous discovery, and immutable compatibility gates).
 
 Agent Workflow UI is the interactive Linux desktop and terminal application
 for human-oracle discussion, decision selection, and post-discussion conflict

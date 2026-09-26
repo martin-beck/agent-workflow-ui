@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-workflow-ui"
-version = "0.6.4"
+version = "0.6.5"
 description = "Interactive human-in-the-loop GUI and terminal UI for Agent Workflow"
 requires-python = ">=3.11"
 dependencies = ["prompt-toolkit==3.0.51", "rich==14.2.0"]
