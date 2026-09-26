@@ -8,6 +8,24 @@ awui-android-service --state .runtime/android-service.json \
   --host 0.0.0.0 --port 8765 --certfile service.crt --keyfile service.key
 ```
 
+For pairing, use `awui-android-pair`. It first checks `/v1/health`; if the
+configured HTTPS endpoint is unavailable, it starts one service process with
+the supplied certificate/key, waits for health, and then creates the one-time
+QR. An already-running healthy service is reused, so repeated pairing does
+not create duplicate listeners:
+
+```text
+awui-android-pair --state .runtime/android-service.json \
+  --project-id my-project --public-host workflow.example \
+  --certfile service.crt --keyfile service.key --ssh-host my-rendezvous \
+  --output .runtime/android-pairing.png
+```
+
+The command writes a PID file only when `--pid-file` is supplied. It never
+generates or transfers private keys; certificate provisioning remains an
+operator/deployment responsibility. `--no-start-service` is available for
+supervised deployments that own the service process.
+
 The service exposes these HTTPS endpoints:
 
 * `GET /v1/health` is an unauthenticated liveness check.
