@@ -21,6 +21,15 @@ awui-android-pair --state .runtime/android-service.json \
   --output .runtime/android-pairing.png
 ```
 
+When `--ssh-host` is supplied without `--endpoint` or `--public-host`, the
+service opens a reverse forward for its actual HTTPS listener on the
+rendezvous host, derives that allocated `https://host:port` endpoint, and puts
+it in the QR. The phone can therefore complete its first registration through
+the SSH rendezvous; it does not need an already-reachable project host or a
+pre-authorized phone SSH key. The rendezvous SSH server must allow
+`GatewayPorts clientspecified` (or an equivalent public bind), and the TLS
+certificate must be valid for the QR host.
+
 The command writes a PID file only when `--pid-file` is supplied. It never
 generates or transfers private keys; certificate provisioning remains an
 operator/deployment responsibility. `--no-start-service` is available for

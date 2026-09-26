@@ -117,8 +117,8 @@ def main() -> None:
                         help="SSH config alias used for the service-owned reverse tunnel (or AWUI_SSH_HOST)")
     parser.add_argument("--ssh-phone-host", default=os.environ.get("AWUI_SSH_PHONE_HOST"),
                         help="phone-reachable candidate; defaults to HostName from ssh -G")
-    parser.add_argument("--ssh-bind-address", default=os.environ.get("AWUI_SSH_BIND_ADDRESS", "127.0.0.1"),
-                        help="relay-side reverse tunnel bind; use 0.0.0.0 only when that port is reachable")
+    parser.add_argument("--ssh-bind-address", default=os.environ.get("AWUI_SSH_BIND_ADDRESS", "0.0.0.0"),
+                        help="rendezvous-side reverse tunnel bind; 0.0.0.0 is required for phone bootstrap")
     args = parser.parse_args()
     registry = AndroidDeviceRegistry(args.state)
     handler = type("AndroidHandler", (_Handler,), {"registry": registry, "service_key": args.service_key})
@@ -126,29 +126,23 @@ def main() -> None:
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(args.certfile, args.keyfile)
     server.socket = context.wrap_socket(server.socket, server_side=True)
-    tunnel_server = None
     tunnel = None
     try:
         if args.ssh_host:
             alias = configured_alias(args.ssh_host)
             assert alias is not None
-            tunnel_handler = type("AndroidTunnelHandler", (_Handler,), {
-                "registry": registry, "service_key": args.service_key, "tunnel_mode": True})
-            tunnel_server = ThreadingHTTPServer(("127.0.0.1", 0), tunnel_handler)
-            from threading import Thread
-            Thread(target=tunnel_server.serve_forever, name="awui-android-tunnel-http", daemon=True).start()
-            tunnel = open_reverse_tunnel(alias, tunnel_server.server_address[1],
+            # Forward the actual TLS listener.  This makes the rendezvous
+            # endpoint in the QR usable before the phone has credentials or
+            # an authorized SSH key of its own.
+            tunnel = open_reverse_tunnel(alias, args.port,
                                          bind_address=args.ssh_bind_address)
             metadata = rendezvous_metadata(alias, tunnel.remote_port, phone_host=args.ssh_phone_host)
             registry.configure_ssh_rendezvous(metadata=metadata, service_alias=alias,
-                                               installer=mutate_authorized_key)
+                                              installer=mutate_authorized_key)
         server.serve_forever()
     finally:
         if tunnel:
             tunnel.close()
-        if tunnel_server:
-            tunnel_server.shutdown()
-            tunnel_server.server_close()
         server.server_close()
 
 

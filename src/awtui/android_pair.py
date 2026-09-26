@@ -95,6 +95,21 @@ def _write_pairing(payload: dict, output: Path | None) -> None:
         print(json.dumps(payload, sort_keys=True))
 
 
+def rendezvous_endpoint(state: dict, *, ssh_host: str | None, endpoint: str | None,
+                        public_host: str | None, service_host: str, service_port: int) -> str:
+    """Select the authoritative HTTPS endpoint for the QR bootstrap."""
+    if endpoint:
+        return endpoint
+    if public_host:
+        return endpoint_for(public_host, service_port)
+    if ssh_host:
+        rendezvous = state.get("ssh_rendezvous")
+        if not isinstance(rendezvous, dict):
+            raise ValueError("SSH service started without rendezvous metadata; cannot create phone bootstrap")
+        return endpoint_for(str(rendezvous.get("host", "")), int(rendezvous.get("forward_port", 0)))
+    return endpoint_for(service_host, service_port)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Start/reuse HTTPS and initialize Android pairing")
     parser.add_argument("--state", required=True)
@@ -114,15 +129,27 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--no-start-service", action="store_true")
     args = parser.parse_args()
-    endpoint = args.endpoint or endpoint_for(args.public_host or args.service_host, args.service_port)
-    if not endpoint.startswith("https://"):
+    # With SSH rendezvous, the local listener must become healthy first; the
+    # service then records the allocated public forward port in state and the
+    # QR endpoint is derived from that metadata.  This is the only bootstrap
+    # path that works when the phone cannot reach the workflow host directly.
+    local_endpoint = endpoint_for(args.service_host, args.service_port)
+    requested_endpoint = args.endpoint or (endpoint_for(args.public_host, args.service_port)
+                                            if args.public_host else local_endpoint)
+    if not requested_endpoint.startswith("https://"):
         raise SystemExit("--endpoint must use HTTPS")
-    ensure_service(endpoint=endpoint, state=args.state, host=args.service_host,
+    ensure_service(endpoint=local_endpoint if args.ssh_host and not args.endpoint and not args.public_host
+                   else requested_endpoint,
+                   state=args.state, host=args.service_host,
                    port=args.service_port, certfile=args.certfile, keyfile=args.keyfile,
                    service_key=args.service_key, ssh_host=args.ssh_host,
                    ssh_phone_host=args.ssh_phone_host, ssh_bind_address=args.ssh_bind_address,
                    pid_file=args.pid_file, start=not args.no_start_service)
-    payload = AndroidDeviceRegistry(args.state).create_bootstrap(
+    registry = AndroidDeviceRegistry(args.state)
+    endpoint = rendezvous_endpoint(registry.state, ssh_host=args.ssh_host,
+                                   endpoint=args.endpoint, public_host=args.public_host,
+                                   service_host=args.service_host, service_port=args.service_port)
+    payload = registry.create_bootstrap(
         project_id=args.project_id, endpoint=endpoint, ttl_seconds=args.ttl)
     _write_pairing(payload, args.output)
 
