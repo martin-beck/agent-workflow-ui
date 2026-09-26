@@ -1,6 +1,6 @@
 # Agent Workflow UI
 
-Release line: **v0.6.5** (automatic HTTPS service startup during Android
+Release line: **v0.6.6** (SSH-rendezvous HTTPS bootstrap for Android
 pairing, SSH rendezvous discovery, and immutable compatibility gates).
 
 Agent Workflow UI is the interactive Linux desktop and terminal application

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from awtui.android_pair import endpoint_for, ensure_service
+from awtui.android_pair import endpoint_for, ensure_service, rendezvous_endpoint
 
 
 def test_endpoint_for_supports_ipv6_and_rejects_options():
@@ -51,3 +51,17 @@ def test_ensure_service_requires_tls_material_when_absent(monkeypatch, tmp_path)
     with pytest.raises(RuntimeError, match="--certfile and --keyfile"):
         ensure_service(endpoint="https://workflow.example", state=tmp_path / "state.json",
                        host="127.0.0.1", port=8765, certfile=None, keyfile=None)
+
+
+def test_rendezvous_endpoint_uses_allocated_https_forward_for_first_bootstrap():
+    assert rendezvous_endpoint(
+        {"ssh_rendezvous": {"host": "relay.example", "forward_port": 40123}},
+        ssh_host="node26", endpoint=None, public_host=None,
+        service_host="127.0.0.1", service_port=8765,
+    ) == "https://relay.example:40123"
+
+
+def test_rendezvous_endpoint_requires_metadata_when_ssh_bootstrap_requested():
+    with pytest.raises(ValueError, match="rendezvous metadata"):
+        rendezvous_endpoint({}, ssh_host="node26", endpoint=None, public_host=None,
+                            service_host="127.0.0.1", service_port=8765)
