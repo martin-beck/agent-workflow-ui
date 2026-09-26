@@ -382,7 +382,7 @@
       },
       {
         "path": "src/awtui/android_pair.py",
-        "sha256": "sha256:a305863f5def1399e78c6d757ca35cabf709eaa566719274e042158b6ba2423e"
+        "sha256": "sha256:1cfd5dda044e65e236693fb3c5508b60e71ae56571a781f7eeb3b975db43695f"
       },
       {
         "path": "src/awtui/android_register.py",
@@ -390,7 +390,7 @@
       },
       {
         "path": "src/awtui/android_server.py",
-        "sha256": "sha256:f14c406b67532abd532121553d6804cc66b8d5c7aebc8e3c7c7df388f145bda9"
+        "sha256": "sha256:45c435fe67cdd8f4e52043baa0ca33f29f96532760cea24a8b9277b4eac98efa"
       },
       {
         "path": "src/awtui/android_service.py",
@@ -537,11 +537,11 @@
         "sha256": "sha256:2cf6b4c428f70aba22dd5fc74487bccbfe275519f5dc73da9053f750973a728d"
       }
     ],
-    "version": "sha256:d97aaa0b0676d03aa30d698e9a5c5ac22f822ff0b688c29073fe2786043bc874"
+    "version": "sha256:812f83f5049bf44313c066814baa825befb7453cb2303d216240d12826189270"
   },
   "schema_version": 1,
   "source_release": {
     "project": "agent-workflow-ui",
-    "version": "0.6.5"
+    "version": "0.6.6"
   }
 }
