@@ -232,7 +232,7 @@ fun WorkflowApp(initialBatch: JSONObject? = null) {
               tunnelEndpoint = tunnel!!.endpoint
             }
             val routedEndpoint = tunnel?.endpoint ?: endpoint
-            val client = AndroidBridgeClient(routedEndpoint)
+            val client = AndroidBridgeClient(routedEndpoint, allowLoopbackHttp = tunnel != null)
             if (sshBootstrap.isNotBlank() && credential.isBlank() && tunnel != null) {
               val issued = withContext(Dispatchers.IO) {
                 val challenge = client.sshChallenge(deviceId)
@@ -317,7 +317,7 @@ fun WorkflowApp(initialBatch: JSONObject? = null) {
                             .toString()
                         }
                       }
-                      val client = AndroidBridgeClient(activeEndpoint)
+                      val client = AndroidBridgeClient(activeEndpoint, allowLoopbackHttp = tunnelEndpoint.isNotBlank())
                       // Send every durable outbox item in sequence order. A retry
                       // uses the exact same sequence and payload and is accepted
                       // idempotently by AndroidDeviceRegistry.

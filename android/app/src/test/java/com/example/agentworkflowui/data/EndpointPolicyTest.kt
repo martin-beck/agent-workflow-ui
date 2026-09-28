@@ -18,6 +18,13 @@ class EndpointPolicyTest {
   }
 
   @Test
+  fun permitsOnlyLoopbackHttpForEstablishedTunnel() {
+    assertEquals("http://127.0.0.1:43111", EndpointPolicy.requireTunnelEndpoint("http://127.0.0.1:43111"))
+    expectFailure { EndpointPolicy.requireTunnelEndpoint("http://relay.example:43111") }
+    expectFailure { EndpointPolicy.requireHttps("http://127.0.0.1:43111") }
+  }
+
+  @Test
   fun validatesRendezvousMetadataBeforeRegistration() {
     val qr = JSONObject("""
       {"endpoint":"https://workflow.example:8443",
