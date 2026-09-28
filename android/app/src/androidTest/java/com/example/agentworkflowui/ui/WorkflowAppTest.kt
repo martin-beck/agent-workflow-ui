@@ -7,75 +7,65 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import org.json.JSONObject
 import org.junit.Rule
 import org.junit.Test
 
-/** Smoke coverage for the real decision workspace used by the emulator job. */
+/** UI coverage for a real revision-bound batch, including document parity. */
 class WorkflowAppTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
+  private fun batch() = JSONObject("""
+    {"session_id":"session-1","task_revision":1,"packet_digest":"sha256:test",
+     "design_markdown":"# Design\\n\\nThe boundary phrase is authoritative.",
+     "workplan_markdown":"# Work plan\\n\\nThe rollout phrase is authoritative.",
+     "decisions":[
+       {"id":"d1","title":"Boundary","context":"design:L3","anchor":"design:L3",
+        "highlights":{"design":"boundary phrase","workplan":"rollout phrase"},
+        "proposals":[{"label":"Keep boundary","rationale":"Stable","implications":"No migration"},{"label":"Rework boundary","tradeoffs":"More risk"}]},
+       {"id":"d2","title":"Rollout","context":"workplan:L3","anchor":"workplan:L3",
+        "highlights":{"design":"boundary phrase","workplan":"rollout phrase"},
+        "proposals":["Canary","Immediate"]}]}
+  """.trimIndent())
+
   @Test
-  fun decisionWorkspaceShowsBatchAndRegistrationControl() {
+  fun emptyWorkspaceDoesNotInventDecisions() {
     composeTestRule.setContent { WorkflowApp() }
-    composeTestRule.onNodeWithText("Batch: AR decisions").assertExists()
+    composeTestRule.onNodeWithText("No decision batch is pending.").assertExists()
     composeTestRule.onNodeWithText("Register phone").assertExists()
-    composeTestRule.onNodeWithText("Allocator metadata strategy").assertExists()
   }
 
   @Test
-  fun batchSelectionMarksDecisionAndSaveCompletes() {
-    composeTestRule.setContent { WorkflowApp() }
-
-    composeTestRule.onNodeWithText("Inline metadata").performClick()
-    composeTestRule.onNodeWithText("✓ Allocator metadata strategy").assertExists()
-    composeTestRule.onNodeWithText("Benchmark acceptance gate").performClick()
-    composeTestRule.onNodeWithText("Strict gate").performClick()
-    composeTestRule.onNodeWithText("✓ Benchmark acceptance gate").assertExists()
-    composeTestRule.onNodeWithText("Save").performClick()
-    composeTestRule.onNodeWithText("Saved").assertExists()
+  fun authoritativeDocumentsAndMultipleDecisionsAreDisplayed() {
+    composeTestRule.setContent { WorkflowApp(batch()) }
+    composeTestRule.onNodeWithText("The boundary phrase is authoritative.").assertExists()
+    composeTestRule.onNodeWithText("Boundary").assertExists()
+    composeTestRule.onNodeWithText("Rollout").performClick()
+    composeTestRule.onNodeWithText("The rollout phrase is authoritative.").assertExists()
   }
 
   @Test
-  fun designAndWorkPlanTabsRemainAvailableDuringBatchReview() {
-    composeTestRule.setContent { WorkflowApp() }
-
-    composeTestRule.onNodeWithText("Work plan").performClick()
-    composeTestRule.onNodeWithText("WORK PLAN").assertExists()
-    composeTestRule.onNodeWithText("Allocator metadata strategy").performClick()
-    composeTestRule.onNodeWithText("Design").performClick()
-    composeTestRule.onNodeWithText("DESIGN DOCUMENT").assertExists()
+  fun proposalDetailsAndOwnProposalRemainEditable() {
+    composeTestRule.setContent { WorkflowApp(batch()) }
+    composeTestRule.onNodeWithText("Keep boundary").performClick()
+    composeTestRule.onNodeWithText("Rationale: Stable").assertExists()
+    composeTestRule.onNodeWithText("Implications: No migration").assertExists()
+    composeTestRule.onNodeWithContentDescription("Own proposal editor for Boundary")
+      .performTextInput("Use a measured boundary")
+    composeTestRule.onNodeWithContentDescription("Own proposal editor for Boundary")
+      .assertTextContains("Use a measured boundary")
+    composeTestRule.onNodeWithText("Rework boundary").performClick()
+    composeTestRule.onNodeWithText("Proposal details").assertExists()
   }
 
   @Test
-  fun ownProposalReplacesSelectionAndCanBeChangedBeforeSave() {
-    composeTestRule.setContent { WorkflowApp() }
-
-    // An operator may revise a decision before committing the batch.  Entering
-    // an own proposal clears the previously selected canned proposal, and a
-    // later canned choice clears the draft again.
-    composeTestRule.onNodeWithText("Inline metadata").performClick()
-    composeTestRule.onNodeWithContentDescription("Own proposal editor for Allocator metadata strategy")
-      .performTextInput("Segmented metadata")
-    composeTestRule.onNodeWithContentDescription("Own proposal editor for Allocator metadata strategy")
-      .assertTextContains("Segmented metadata")
-    composeTestRule.onNodeWithText("Side metadata").performClick()
-    composeTestRule.onNodeWithText("✓ Allocator metadata strategy").assertExists()
-    composeTestRule.onNodeWithText("Save").performClick()
-    composeTestRule.onNodeWithText("Saved").assertExists()
-  }
-
-  @Test
-  fun batchProgressShowsUnansweredDecisionBeforeFinalSave() {
-    composeTestRule.setContent { WorkflowApp() }
-
-    composeTestRule.onNodeWithContentDescription("Decision progress: 0 of 3 answered").assertExists()
-    composeTestRule.onNodeWithText("Inline metadata").performClick()
-    composeTestRule.onNodeWithContentDescription("Decision progress: 1 of 3 answered").assertExists()
-    composeTestRule.onNodeWithText("Benchmark acceptance gate").performClick()
-    composeTestRule.onNodeWithText("Strict gate").performClick()
-    composeTestRule.onNodeWithContentDescription("Decision progress: 2 of 3 answered").assertExists()
-    composeTestRule.onNodeWithText("Rollout and rollback").performClick()
+  fun selectionProgressCoversWholeBatch() {
+    composeTestRule.setContent { WorkflowApp(batch()) }
+    composeTestRule.onNodeWithContentDescription("Decision progress: 0 of 2 answered").assertExists()
+    composeTestRule.onNodeWithText("Keep boundary").performClick()
+    composeTestRule.onNodeWithContentDescription("Decision progress: 1 of 2 answered").assertExists()
+    composeTestRule.onNodeWithText("Rollout").performClick()
     composeTestRule.onNodeWithText("Canary").performClick()
-    composeTestRule.onNodeWithContentDescription("Decision progress: 3 of 3 answered").assertExists()
+    composeTestRule.onNodeWithContentDescription("Decision progress: 2 of 2 answered").assertExists()
   }
 }
