@@ -27,13 +27,17 @@ class EndpointPolicyTest {
 
   @Test
   fun validatesRendezvousMetadataBeforeRegistration() {
-    val qr = JSONObject().put("endpoint", "https://workflow.example:8443")
-      .put("ssh_rendezvous", JSONObject().put("host", "relay.example").put("port", 22)
-        .put("forward_port", 43111).put("host_key_fingerprint", "SHA256:abc"))
+    val qr = JSONObject("""
+      {"endpoint":"https://workflow.example:8443",
+       "ssh_rendezvous":{"host":"relay.example","port":22,
+        "forward_port":43111,"host_key_fingerprint":"SHA256:abc"}}
+    """.trimIndent())
     assertEquals("https://workflow.example:8443", EndpointPolicy.validateQr(qr))
-    val invalid = JSONObject().put("endpoint", "https://workflow.example:8443")
-      .put("ssh_rendezvous", JSONObject().put("host", "relay.example").put("port", 22)
-        .put("forward_port", 0).put("host_key_fingerprint", "SHA256:abc"))
+    val invalid = JSONObject("""
+      {"endpoint":"https://workflow.example:8443",
+       "ssh_rendezvous":{"host":"relay.example","port":22,
+        "forward_port":0,"host_key_fingerprint":"SHA256:abc"}}
+    """.trimIndent())
     assertTrue(runCatching { EndpointPolicy.validateQr(invalid) }.isFailure)
   }
 
