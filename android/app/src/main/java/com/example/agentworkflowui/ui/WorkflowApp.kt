@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.agentworkflowui.data.AndroidBridgeClient
 import com.example.agentworkflowui.data.DeviceIdentity
+import com.example.agentworkflowui.data.EndpointPolicy
 import com.example.agentworkflowui.data.RegistrationStore
 import com.example.agentworkflowui.data.SshTunnelManager
 import com.example.agentworkflowui.ui.scanner.QrScanner
@@ -538,6 +539,7 @@ private fun RegistrationDialog(onDismiss: () -> Unit, onRegistered: (Registratio
           scope.launch {
             try {
               require(qr != null) { "QR payload is not valid JSON" }
+              EndpointPolicy.validateQr(qr)
               val response = withContext(Dispatchers.IO) {
                 val bootstrapEndpoint = qr.optString("bootstrap_endpoint", qr.getString("endpoint"))
                 AndroidBridgeClient(bootstrapEndpoint).register(
