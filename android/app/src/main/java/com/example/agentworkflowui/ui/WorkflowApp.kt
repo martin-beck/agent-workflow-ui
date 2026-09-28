@@ -111,6 +111,8 @@ private fun proposalFromJson(value: Any?): Proposal {
 }
 
 internal fun decisionsFromBatch(batch: JSONObject): List<Decision> {
+  val documents = mapOf("design" to batch.optString("design_markdown"),
+    "workplan" to batch.optString("workplan_markdown"))
   val values = batch.optJSONArray("decisions") ?: return emptyList()
   return buildList {
     for (index in 0 until values.length()) {
@@ -121,6 +123,19 @@ internal fun decisionsFromBatch(batch: JSONObject): List<Decision> {
           map.keys().forEach { key -> put(key, map.optString(key)) }
         }
         value.optString("highlight").takeIf(String::isNotBlank)?.let { putIfAbsent("design", it) }
+        value.optJSONObject("highlight_ranges")?.let { ranges ->
+          ranges.keys().forEach { document ->
+            val range = ranges.optJSONObject(document) ?: return@forEach
+            val text = range.optString("text", range.optString("highlight"))
+            if (text.isNotBlank()) putIfAbsent(document, text)
+            else if (range.has("start") && range.has("end")) {
+              val source = documents[document].orEmpty()
+              val start = range.optInt("start", -1)
+              val end = range.optInt("end", -1)
+              if (start >= 0 && end > start && end <= source.length) putIfAbsent(document, source.substring(start, end))
+            }
+          }
+        }
       }
       add(Decision(value.optString("id", "D-${index + 1}"),
         value.optString("title", "Decision ${index + 1}"),
