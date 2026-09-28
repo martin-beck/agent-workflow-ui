@@ -327,7 +327,7 @@ fun WorkflowApp(initialBatch: JSONObject? = null) {
                 contentDescription = "Rendered ${if (tab == 0) "design document" else "work plan"}"
               })
             Spacer(Modifier.height(6.dp))
-            MarkdownDocument(document, highlight, modifier = Modifier.semantics {
+            MarkdownDocument(document, highlight, active.anchor, modifier = Modifier.semantics {
               contentDescription = "${if (tab == 0) "Design" else "Work plan"} document content for ${active.title}"
             })
           }
@@ -396,8 +396,20 @@ private fun ProposalDetail(label: String, value: String) {
  * It deliberately preserves source text while styling headings and the exact
  * decision phrase, so document anchors remain attributable to the batch. */
 @Composable
-private fun MarkdownDocument(document: String, highlight: String?, modifier: Modifier = Modifier) {
+private fun MarkdownDocument(document: String, highlight: String?, anchor: String = "", modifier: Modifier = Modifier) {
   val source = document.ifBlank { "No document was supplied by the workflow service." }
+  val scrollState = rememberScrollState()
+  LaunchedEffect(source, highlight, anchor) {
+    // Anchors are emitted as design:L42/workplan:L42.  Use the exact phrase
+    // when available, otherwise the anchor line, keeping the active context
+    // visible when switching decisions or documents.
+    val anchorLine = anchor.substringAfterLast(":L", "").toIntOrNull()
+    val phraseLine = highlight?.takeIf(String::isNotBlank)?.let { phrase ->
+      source.substring(0, source.indexOf(phrase).coerceAtLeast(0)).count { it == '\n' } + 1
+    }
+    val line = phraseLine ?: anchorLine
+    if (line != null && line > 0) scrollState.animateScrollTo((line - 1) * 48)
+  }
   val rendered = buildAnnotatedString {
     val target = highlight?.takeIf(String::isNotBlank) ?: ""
     var cursor = 0
@@ -430,7 +442,7 @@ private fun MarkdownDocument(document: String, highlight: String?, modifier: Mod
       cursor = if (end < source.length) end + 1 else source.length
     }
   }
-  Text(rendered, modifier = modifier.verticalScroll(rememberScrollState()),
+  Text(rendered, modifier = modifier.verticalScroll(scrollState),
     style = MaterialTheme.typography.bodyMedium)
 }
 
