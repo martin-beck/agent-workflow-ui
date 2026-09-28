@@ -49,6 +49,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -66,43 +70,71 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-private data class Decision(val id: String, val title: String, val context: String,
-                            val proposals: List<String>, val selected: Int? = null,
+internal data class Proposal(val label: String, val rationale: String = "",
+                            val implications: String = "", val tradeoffs: String = "",
+                            val confidence: String = "", val reversibility: String = "",
+                            val evidence: List<String> = emptyList())
+internal data class Decision(val id: String, val title: String, val context: String,
+                            val proposals: List<Proposal>, val anchor: String = "",
+                            val highlights: Map<String, String> = emptyMap(),
+                            val helper: String = "", val selected: Int? = null,
                             val own: String = "")
 
 private val decisionSaver = listSaver<List<Decision>, String>(
   save = { decisions -> decisions.flatMap { decision ->
     listOf(decision.id, decision.title, decision.context, decision.selected?.toString() ?: "",
-      decision.own, decision.proposals.joinToString("\u001f"))
+      decision.own, decision.proposals.joinToString("\u001f") { it.label }, decision.anchor,
+      decision.highlights["design"] ?: "", decision.highlights["workplan"] ?: "", decision.helper)
   } },
-  restore = { values -> values.chunked(6).mapNotNull { fields ->
-    if (fields.size != 6) null else Decision(fields[0], fields[1], fields[2],
-      fields[5].split("\u001f").filter(String::isNotEmpty), fields[3].toIntOrNull(), fields[4])
+  restore = { values -> values.chunked(10).mapNotNull { fields ->
+    if (fields.size < 10) null else Decision(fields[0], fields[1], fields[2],
+      fields[5].split("\u001f").filter(String::isNotEmpty).map(::Proposal),
+      anchor = fields[6], highlights = mapOf("design" to fields[7], "workplan" to fields[8]),
+      helper = fields[9], selected = fields[3].toIntOrNull(), own = fields[4])
   } }
 )
 
-private fun defaultDecisions() = listOf(
-  Decision("D-1", "Allocator metadata strategy", "Design §2.1", listOf("Inline metadata", "Side metadata")),
-  Decision("D-2", "Benchmark acceptance gate", "Work plan §4", listOf("Strict gate", "Advisory gate")),
-  Decision("D-3", "Rollout and rollback", "Work plan §6", listOf("Canary", "Immediate")))
+private fun defaultDecisions() = emptyList<Decision>()
 
-private fun decisionsFromBatch(batch: JSONObject): List<Decision> {
+private fun proposalFromJson(value: Any?): Proposal {
+  if (value is String) return Proposal(value)
+  val json = value as? JSONObject ?: return Proposal("")
+  val evidence = buildList {
+    val refs = json.optJSONArray("evidence_refs") ?: json.optJSONArray("evidence")
+    if (refs != null) for (i in 0 until refs.length()) add(refs.optString(i))
+  }
+  return Proposal(json.optString("label", json.optString("title", "Proposal")),
+    json.optString("rationale"), json.optString("implications", json.optString("impact")),
+    json.optString("tradeoffs", json.optString("trade_offs")),
+    if (json.has("confidence")) json.optString("confidence") else "",
+    json.optString("reversibility"), evidence)
+}
+
+internal fun decisionsFromBatch(batch: JSONObject): List<Decision> {
   val values = batch.optJSONArray("decisions") ?: return emptyList()
   return buildList {
     for (index in 0 until values.length()) {
       val value = values.getJSONObject(index)
       val proposals = value.optJSONArray("proposals") ?: org.json.JSONArray()
+      val highlights = buildMap {
+        value.optJSONObject("highlights")?.let { map ->
+          map.keys().forEach { key -> put(key, map.optString(key)) }
+        }
+        value.optString("highlight").takeIf(String::isNotBlank)?.let { putIfAbsent("design", it) }
+      }
       add(Decision(value.optString("id", "D-${index + 1}"),
         value.optString("title", "Decision ${index + 1}"),
         value.optString("context", "AR decision"),
-        buildList { for (proposalIndex in 0 until proposals.length()) add(proposals.optString(proposalIndex)) }))
+        buildList { for (proposalIndex in 0 until proposals.length()) add(proposalFromJson(proposals.opt(proposalIndex))) },
+        value.optString("anchor", value.optString("point_id")), highlights,
+        value.optString("helper", value.optString("question"))))
     }
   }
 }
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun WorkflowApp() {
+fun WorkflowApp(initialBatch: JSONObject? = null) {
   AgentWorkflowUITheme {
     val snackbars = remember { SnackbarHostState() }
     var registered by remember { mutableStateOf(false) }
@@ -116,12 +148,16 @@ fun WorkflowApp() {
     var sessionId by remember { mutableStateOf("") }
     var taskRevision by remember { mutableIntStateOf(0) }
     var packetDigest by remember { mutableStateOf("") }
+    var designDocument by rememberSaveable { mutableStateOf(initialBatch?.optString("design_markdown") ?: "") }
+    var workplanDocument by rememberSaveable { mutableStateOf(initialBatch?.optString("workplan_markdown") ?: "") }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var showScanner by remember { mutableStateOf(false) }
     var current by rememberSaveable { mutableIntStateOf(0) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var saved by rememberSaveable { mutableStateOf(false) }
-    var decisions by rememberSaveable(stateSaver = decisionSaver) { mutableStateOf(defaultDecisions()) }
+    var decisions by rememberSaveable(stateSaver = decisionSaver) {
+      mutableStateOf(initialBatch?.let(::decisionsFromBatch) ?: defaultDecisions())
+    }
     val context = LocalContext.current
     LaunchedEffect(Unit) {
       RegistrationStore(context).load()?.let { registration ->
@@ -165,11 +201,11 @@ fun WorkflowApp() {
             sessionId = batch.optString("session_id")
             taskRevision = batch.optInt("task_revision")
             packetDigest = batch.optString("packet_digest")
+            designDocument = batch.optString("design_markdown")
+            workplanDocument = batch.optString("workplan_markdown")
             val live = decisionsFromBatch(batch)
-            if (live.isNotEmpty()) {
-              decisions = live
-              current = current.coerceAtMost(live.lastIndex)
-            }
+            decisions = live
+            current = current.coerceAtMost((live.lastIndex).coerceAtLeast(0))
           }
           }.onFailure {
             if (sshBootstrap.isNotBlank()) {
@@ -184,7 +220,7 @@ fun WorkflowApp() {
         tunnelEndpoint = ""
       }
     }
-    val active = decisions[current]
+    val active = decisions.getOrNull(current)
     Scaffold(topBar = {
       TopAppBar(title = { Text("Agent Workflow UI") }, actions = {
         Text(if (registered) "● $connectionState" else "○ $connectionState",
@@ -215,7 +251,7 @@ fun WorkflowApp() {
                       val journal = RegistrationStore(context).eventJournal()
                       decisions.forEach { decision ->
                         val answer = decision.own.ifBlank {
-                          decision.selected?.let { decision.proposals[it] } ?: return@forEach
+                          decision.selected?.let { decision.proposals[it].label } ?: return@forEach
                         }
                         journal.reserve(sessionId, decision.id, answer,
                           binding = "$taskRevision:$packetDigest") { sequence ->
@@ -249,7 +285,10 @@ fun WorkflowApp() {
           modifier = Modifier.padding(horizontal = 12.dp).semantics {
             contentDescription = "Decision progress: ${decisions.count { it.selected != null || it.own.isNotBlank() }} of ${decisions.size} answered"
           }, color = MaterialTheme.colorScheme.primary)
-        Row(Modifier.fillMaxWidth().height(230.dp).padding(12.dp)) {
+        if (active == null) {
+          Text(if (registered) "No decision batch is pending." else "Register this phone to receive an authoritative decision batch.",
+            modifier = Modifier.padding(24.dp).semantics { contentDescription = "No pending decisions" })
+        } else Row(Modifier.fillMaxWidth().height(300.dp).padding(12.dp)) {
           LazyColumn(Modifier.weight(0.38f)) {
             items(decisions) { decision ->
               val index = decisions.indexOf(decision)
@@ -266,17 +305,20 @@ fun WorkflowApp() {
           }
           Spacer(Modifier.width(8.dp))
           Column(Modifier.weight(0.62f).verticalScroll(rememberScrollState())) {
+            val document = if (tab == 0) designDocument else workplanDocument
+            val highlight = active.highlights[if (tab == 0) "design" else "workplan"]
             Text(if (tab == 0) "DESIGN DOCUMENT" else "WORK PLAN", fontWeight = FontWeight.Bold,
               modifier = Modifier.semantics {
                 contentDescription = "Rendered ${if (tab == 0) "design document" else "work plan"}"
               })
             Spacer(Modifier.height(6.dp))
-            Text(if (tab == 0) "# Design document\n\n## 2.1 Decisions\n\n${active.context}\n\n${active.title} is highlighted here.\n\nThe complete Markdown document is rendered in this pane; the active anchor remains visible when the decision changes."
-            else "# Work plan\n\n## 4. Delivery gates\n\n${active.context}\n\n${active.title} is highlighted here.\n\nDependencies, evidence, and rollback notes remain available while selecting proposals.")
+            MarkdownDocument(document, highlight, modifier = Modifier.semantics {
+              contentDescription = "${if (tab == 0) "Design" else "Work plan"} document content for ${active.title}"
+            })
           }
         }
         TabRow(selectedTabIndex = tab) { Tab(tab == 0, { tab = 0 }, text = { Text("Design") }); Tab(tab == 1, { tab = 1 }, text = { Text("Work plan") }) }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+        if (active != null) Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
           Text("Decision ${current + 1}: ${active.title}", style = MaterialTheme.typography.titleLarge)
           Text(active.context, style = MaterialTheme.typography.labelMedium)
           Spacer(Modifier.height(8.dp))
@@ -284,9 +326,23 @@ fun WorkflowApp() {
             FilterChip(selected = active.selected == index, onClick = {
               decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = index, own = "") else value }
               saved = false
-            }, label = { Text(proposal) }, modifier = Modifier.padding(end = 8.dp).semantics {
-              contentDescription = "Proposal ${index + 1}: $proposal${if (active.selected == index) ", selected" else ""}"
+            }, label = { Text(proposal.label) }, modifier = Modifier.padding(end = 8.dp).semantics {
+              contentDescription = "Proposal ${index + 1}: ${proposal.label}${if (active.selected == index) ", selected" else ""}"
             })
+          }
+          val selectedProposal = active.selected?.let { active.proposals.getOrNull(it) }
+          selectedProposal?.let { proposal ->
+            Card(Modifier.fillMaxWidth().padding(top = 8.dp).semantics {
+              contentDescription = "Proposal details for ${proposal.label}"
+            }) { Column(Modifier.padding(12.dp)) {
+              Text("Proposal details", fontWeight = FontWeight.Bold)
+              ProposalDetail("Rationale", proposal.rationale)
+              ProposalDetail("Implications", proposal.implications)
+              ProposalDetail("Trade-offs", proposal.tradeoffs)
+              ProposalDetail("Confidence", proposal.confidence)
+              ProposalDetail("Reversibility", proposal.reversibility)
+              ProposalDetail("Evidence", proposal.evidence.joinToString(", "))
+            } }
           }
           OutlinedTextField(value = active.own, onValueChange = { text ->
             decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = null, own = text) else value }
@@ -294,6 +350,8 @@ fun WorkflowApp() {
           }, label = { Text("Own proposal (optional)") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).semantics {
             contentDescription = "Own proposal editor for ${active.title}"
           })
+          if (active.helper.isNotBlank()) Text(active.helper, style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.semantics { contentDescription = "Helper information: ${active.helper}" })
           Text("Only the selected proposal is committed. You can revise it before Save.", style = MaterialTheme.typography.bodySmall)
           Spacer(Modifier.height(12.dp))
           HorizontalDivider()
@@ -311,6 +369,54 @@ fun WorkflowApp() {
       })
     }
   }
+}
+
+@Composable
+private fun ProposalDetail(label: String, value: String) {
+  if (value.isNotBlank()) Text("$label: $value", style = MaterialTheme.typography.bodySmall,
+    modifier = Modifier.padding(top = 3.dp))
+}
+
+/** Small dependency-free Markdown renderer for the authoritative service documents.
+ * It deliberately preserves source text while styling headings and the exact
+ * decision phrase, so document anchors remain attributable to the batch. */
+@Composable
+private fun MarkdownDocument(document: String, highlight: String?, modifier: Modifier = Modifier) {
+  val source = document.ifBlank { "No document was supplied by the workflow service." }
+  val rendered = buildAnnotatedString {
+    val target = highlight?.takeIf(String::isNotBlank) ?: ""
+    var cursor = 0
+    while (cursor < source.length) {
+      val end = source.indexOf('\n', cursor).let { if (it < 0) source.length else it }
+      val line = source.substring(cursor, end)
+      val trimmed = line.trimStart()
+      val lineStyle = when {
+        trimmed.startsWith("### ") -> SpanStyle(fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.primary)
+        trimmed.startsWith("## ") -> SpanStyle(fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.primary)
+        trimmed.startsWith("# ") -> SpanStyle(fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.primary)
+        else -> SpanStyle()
+      }
+      withStyle(lineStyle) {
+        var offset = 0
+        while (offset < line.length) {
+          val relative = if (target.isNotEmpty()) line.indexOf(target, offset) else -1
+          if (relative < 0) { append(line.substring(offset)); break }
+          append(line.substring(offset, relative))
+          withStyle(SpanStyle(background = Color(0xFFFFE082), fontWeight = FontWeight.Bold)) {
+            append(target)
+          }
+          offset = relative + target.length
+        }
+      }
+      if (end < source.length) append('\n')
+      cursor = if (end < source.length) end + 1 else source.length
+    }
+  }
+  Text(rendered, modifier = modifier.verticalScroll(rememberScrollState()),
+    style = MaterialTheme.typography.bodyMedium)
 }
 
 @Composable
