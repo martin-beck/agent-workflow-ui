@@ -78,19 +78,24 @@ internal data class Decision(val id: String, val title: String, val context: Str
                             val proposals: List<Proposal>, val anchor: String = "",
                             val highlights: Map<String, String> = emptyMap(),
                             val helper: String = "", val selected: Int? = null,
-                            val own: String = "")
+                            val own: String = "", val ownRationale: String = "",
+                            val ownConfidence: String = "", val ownTradeoffs: String = "",
+                            val disposition: String? = null)
 
 private val decisionSaver = listSaver<List<Decision>, String>(
   save = { decisions -> decisions.flatMap { decision ->
     listOf(decision.id, decision.title, decision.context, decision.selected?.toString() ?: "",
       decision.own, decision.proposals.joinToString("\u001f") { it.label }, decision.anchor,
-      decision.highlights["design"] ?: "", decision.highlights["workplan"] ?: "", decision.helper)
+      decision.highlights["design"] ?: "", decision.highlights["workplan"] ?: "", decision.helper,
+      decision.ownRationale, decision.ownConfidence, decision.ownTradeoffs, decision.disposition ?: "")
   } },
-  restore = { values -> values.chunked(10).mapNotNull { fields ->
-    if (fields.size < 10) null else Decision(fields[0], fields[1], fields[2],
+  restore = { values -> values.chunked(14).mapNotNull { fields ->
+    if (fields.size < 14) null else Decision(fields[0], fields[1], fields[2],
       fields[5].split("\u001f").filter(String::isNotEmpty).map(::Proposal),
       anchor = fields[6], highlights = mapOf("design" to fields[7], "workplan" to fields[8]),
-      helper = fields[9], selected = fields[3].toIntOrNull(), own = fields[4])
+      helper = fields[9], selected = fields[3].toIntOrNull(), own = fields[4],
+      ownRationale = fields[10], ownConfidence = fields[11], ownTradeoffs = fields[12],
+      disposition = fields[13].ifBlank { null })
   } }
 )
 
@@ -170,10 +175,38 @@ fun WorkflowApp(initialBatch: JSONObject? = null) {
     var current by rememberSaveable { mutableIntStateOf(0) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var saved by rememberSaveable { mutableStateOf(false) }
+    var ownProposalDialog by remember { mutableStateOf(false) }
+    var exitDialog by remember { mutableStateOf(false) }
+    var saveExitRequested by remember { mutableStateOf(false) }
     var decisions by rememberSaveable(stateSaver = decisionSaver) {
       mutableStateOf(initialBatch?.let(::decisionsFromBatch) ?: defaultDecisions())
     }
     val context = LocalContext.current
+    LaunchedEffect(saveExitRequested) {
+      if (!saveExitRequested) return@LaunchedEffect
+      if (!registered || sessionId.isBlank() || packetDigest.isBlank() || decisions.isEmpty()) {
+        connectionState = "Cannot Save + Exit: no registered authoritative batch"; saveExitRequested = false
+      } else runCatching {
+        withContext(Dispatchers.IO) {
+          val routed = if (sshBootstrap.isNotBlank()) { require(tunnelEndpoint.isNotBlank()); tunnelEndpoint } else endpoint
+          val journal = RegistrationStore(context).eventJournal()
+          decisions.forEach { decision ->
+            val action = decision.disposition ?: if (decision.selected != null || decision.own.isNotBlank()) "select" else return@forEach
+            val answer = decision.own.ifBlank { decision.selected?.let { decision.proposals[it].label } ?: action }
+            val payload = JSONObject().put("decision_id", decision.id).put("disposition", action).put("answer", answer)
+            journal.reserve(sessionId, decision.id, payload.toString(), binding = "$taskRevision:$packetDigest") { sequence ->
+              JSONObject().put("schema_version", "1.0").put("kind", "android-decision-event").put("project_id", projectId)
+                .put("session_id", sessionId).put("task_revision", taskRevision).put("packet_digest", packetDigest)
+                .put("sequence", sequence).put("event_type", action).put("payload", payload).toString()
+            }
+          }
+          val client = AndroidBridgeClient(routed); journal.pending(sessionId).forEach { item ->
+            client.sendEvent(deviceId, credential, JSONObject(item.event)); journal.acknowledge(sessionId, item.sequence)
+          }
+        }
+      }.onSuccess { saved = true; connectionState = "Saved + exited"; saveExitRequested = false }
+        .onFailure { connectionState = "Save + Exit failed; retry"; saveExitRequested = false }
+    }
     LaunchedEffect(Unit) {
       RegistrationStore(context).load()?.let { registration ->
         projectId = registration.projectId
@@ -253,8 +286,8 @@ fun WorkflowApp(initialBatch: JSONObject? = null) {
             }) { Text(if (registered) "Replace phone" else "Register phone") }
             Spacer(Modifier.width(8.dp))
             Button(onClick = {
-              if (!registered || sessionId.isBlank() || packetDigest.isBlank()) {
-                saved = true
+              if (!registered || sessionId.isBlank() || packetDigest.isBlank() || decisions.isEmpty()) {
+                connectionState = "Cannot save: no registered authoritative batch"; saved = false
               } else {
                 scope.launch {
                   runCatching {
@@ -265,17 +298,21 @@ fun WorkflowApp(initialBatch: JSONObject? = null) {
                       } else endpoint
                       val journal = RegistrationStore(context).eventJournal()
                       decisions.forEach { decision ->
-                        val answer = decision.own.ifBlank {
-                          decision.selected?.let { decision.proposals[it].label } ?: return@forEach
-                        }
-                        journal.reserve(sessionId, decision.id, answer,
+                        val action = decision.disposition ?: if (decision.selected != null || decision.own.isNotBlank()) "select" else return@forEach
+                        val answer = decision.own.ifBlank { decision.selected?.let { decision.proposals[it].label } ?: action }
+                        val payload = JSONObject().put("decision_id", decision.id).put("disposition", action).put("answer", answer)
+                        if (decision.own.isNotBlank()) payload.put("user_proposal", JSONObject()
+                          .put("label", decision.own).put("rationale", decision.ownRationale)
+                          .put("confidence", decision.ownConfidence.toDoubleOrNull() ?: 0.0)
+                          .put("tradeoffs", decision.ownTradeoffs))
+                        journal.reserve(sessionId, decision.id, payload.toString(),
                           binding = "$taskRevision:$packetDigest") { sequence ->
                           JSONObject().put("schema_version", "1.0")
                             .put("kind", "android-decision-event").put("project_id", projectId)
                             .put("session_id", sessionId).put("task_revision", taskRevision)
                             .put("packet_digest", packetDigest).put("sequence", sequence)
-                            .put("event_type", "select")
-                            .put("payload", JSONObject().put("decision_id", decision.id).put("answer", answer))
+                            .put("event_type", action)
+                            .put("payload", payload)
                             .toString()
                         }
                       }
@@ -339,11 +376,17 @@ fun WorkflowApp(initialBatch: JSONObject? = null) {
           Spacer(Modifier.height(8.dp))
           active.proposals.forEachIndexed { index, proposal ->
             FilterChip(selected = active.selected == index, onClick = {
-              decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = index, own = "") else value }
+              decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = index, own = "", disposition = "select") else value }
               saved = false
             }, label = { Text(proposal.label) }, modifier = Modifier.padding(end = 8.dp).semantics {
               contentDescription = "Proposal ${index + 1}: ${proposal.label}${if (active.selected == index) ", selected" else ""}"
             })
+          }
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = null, own = "", disposition = "reject") else value }; saved = false }) { Text("Reject") }
+            OutlinedButton(onClick = { decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = null, own = "", disposition = "clarify") else value }; saved = false }) { Text("Clarify") }
+            OutlinedButton(onClick = { decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = null, own = "", disposition = "request-more-evidence") else value }; saved = false }) { Text("More evidence") }
+            OutlinedButton(onClick = { decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = null, own = "", disposition = "reopen") else value }; saved = false }) { Text("Reopen") }
           }
           val selectedProposal = active.selected?.let { active.proposals.getOrNull(it) }
           selectedProposal?.let { proposal ->
@@ -359,15 +402,13 @@ fun WorkflowApp(initialBatch: JSONObject? = null) {
               ProposalDetail("Evidence", proposal.evidence.joinToString(", "))
             } }
           }
-          OutlinedTextField(value = active.own, onValueChange = { text ->
-            decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = null, own = text) else value }
-            saved = false
-          }, label = { Text("Own proposal (optional)") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).semantics {
-            contentDescription = "Own proposal editor for ${active.title}"
-          })
+          OutlinedButton(onClick = { ownProposalDialog = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            Text(if (active.own.isBlank()) "Add own proposal" else "Edit own proposal: ${active.own}")
+          }
           if (active.helper.isNotBlank()) Text(active.helper, style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.semantics { contentDescription = "Helper information: ${active.helper}" })
           Text("Only the selected proposal is committed. You can revise it before Save.", style = MaterialTheme.typography.bodySmall)
+          Text("Status: ${active.disposition ?: "unresolved"} • ${if (saved) "saved" else "unsaved"}", style = MaterialTheme.typography.labelSmall)
           Spacer(Modifier.height(12.dp))
           HorizontalDivider()
           Text("Operator controls", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
@@ -382,6 +423,32 @@ fun WorkflowApp(initialBatch: JSONObject? = null) {
           projectId, endpoint, deviceId, credential, result.sshBootstrap))
         registered = true; showScanner = false
       })
+    }
+    if (exitDialog) {
+      AlertDialog(onDismissRequest = { exitDialog = false }, title = { Text("Leave decision session?") },
+        text = { Text(if (decisions.any { it.disposition == null }) "Some decisions are still unresolved. Save and exit anyway?" else "Save the current selections and exit the session?") },
+        confirmButton = { TextButton(onClick = { exitDialog = false; saveExitRequested = true }) { Text("Save + Exit") } },
+        dismissButton = { TextButton(onClick = { exitDialog = false }) { Text("Stay") } })
+    }
+    if (ownProposalDialog && active != null) {
+      var label by remember(active.id) { mutableStateOf(active.own) }
+      var rationale by remember(active.id) { mutableStateOf(active.ownRationale) }
+      var confidence by remember(active.id) { mutableStateOf(active.ownConfidence) }
+      var tradeoffs by remember(active.id) { mutableStateOf(active.ownTradeoffs) }
+      AlertDialog(onDismissRequest = { ownProposalDialog = false }, title = { Text("Own proposal") }, text = {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+          OutlinedTextField(label = { Text("Label") }, value = label, onValueChange = { label = it })
+          OutlinedTextField(label = { Text("Rationale") }, value = rationale, onValueChange = { rationale = it })
+          OutlinedTextField(label = { Text("Confidence (0..1)") }, value = confidence, onValueChange = { confidence = it })
+          OutlinedTextField(label = { Text("Trade-offs / implications") }, value = tradeoffs, onValueChange = { tradeoffs = it })
+        }
+      }, confirmButton = { TextButton(onClick = {
+        val valid = label.isNotBlank() && rationale.isNotBlank() && confidence.toDoubleOrNull()?.let { it in 0.0..1.0 } == true && tradeoffs.isNotBlank()
+        if (valid) {
+          decisions = decisions.mapIndexed { i, value -> if (i == current) value.copy(selected = null, own = label, ownRationale = rationale, ownConfidence = confidence, ownTradeoffs = tradeoffs, disposition = "select") else value }
+          saved = false; ownProposalDialog = false
+        }
+      }) { Text("Use proposal") } }, dismissButton = { TextButton(onClick = { ownProposalDialog = false }) { Text("Cancel") } })
     }
   }
 }
