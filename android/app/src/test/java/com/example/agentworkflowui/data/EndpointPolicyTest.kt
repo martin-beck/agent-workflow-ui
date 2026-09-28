@@ -1,6 +1,7 @@
 package com.example.agentworkflowui.data
 
 import junit.framework.TestCase.assertEquals
+import junit.framework.TestCase.assertTrue
 import org.json.JSONObject
 import org.junit.Test
 
@@ -30,8 +31,10 @@ class EndpointPolicyTest {
       .put("ssh_rendezvous", JSONObject().put("host", "relay.example").put("port", 22)
         .put("forward_port", 43111).put("host_key_fingerprint", "SHA256:abc"))
     assertEquals("https://workflow.example:8443", EndpointPolicy.validateQr(qr))
-    qr.getJSONObject("ssh_rendezvous").put("forward_port", 0)
-    expectFailure { EndpointPolicy.validateQr(qr) }
+    val invalid = JSONObject().put("endpoint", "https://workflow.example:8443")
+      .put("ssh_rendezvous", JSONObject().put("host", "relay.example").put("port", 22)
+        .put("forward_port", 0).put("host_key_fingerprint", "SHA256:abc"))
+    assertTrue(runCatching { EndpointPolicy.validateQr(invalid) }.isFailure)
   }
 
   private fun expectFailure(action: () -> Unit) {
