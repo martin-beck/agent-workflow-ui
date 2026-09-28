@@ -27,9 +27,9 @@ class EndpointPolicyTest {
 
   @Test
   fun validatesRendezvousMetadataBeforeRegistration() {
-    val qr = JSONObject("""{"endpoint":"https://workflow.example:8443"}""")
+    val qr = JSONObject().put("endpoint", "https://workflow.example:8443")
     assertEquals("https://workflow.example:8443", EndpointPolicy.validateQr(qr))
-    val invalid = JSONObject("""{"endpoint":"http://workflow.example:8443"}""")
+    val invalid = JSONObject().put("endpoint", "http://workflow.example:8443")
     assertTrue(runCatching { EndpointPolicy.validateQr(invalid) }.isFailure)
   }
 
