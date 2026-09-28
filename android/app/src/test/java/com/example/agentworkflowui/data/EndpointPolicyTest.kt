@@ -1,7 +1,6 @@
 package com.example.agentworkflowui.data
 
 import junit.framework.TestCase.assertEquals
-import junit.framework.TestCase.assertFailsWith
 import org.json.JSONObject
 import org.junit.Test
 
@@ -13,9 +12,9 @@ class EndpointPolicyTest {
 
   @Test
   fun rejectsPlaintextAndCredentialBearingEndpoints() {
-    assertFailsWith<IllegalArgumentException> { EndpointPolicy.requireHttps("http://workflow.example") }
-    assertFailsWith<IllegalArgumentException> { EndpointPolicy.requireHttps("https://user:secret@workflow.example") }
-    assertFailsWith<IllegalArgumentException> { EndpointPolicy.requireHttps("https://workflow.example/v1") }
+    expectFailure { EndpointPolicy.requireHttps("http://workflow.example") }
+    expectFailure { EndpointPolicy.requireHttps("https://user:secret@workflow.example") }
+    expectFailure { EndpointPolicy.requireHttps("https://workflow.example/v1") }
   }
 
   @Test
@@ -27,6 +26,15 @@ class EndpointPolicyTest {
     """.trimIndent())
     assertEquals("https://workflow.example:8443", EndpointPolicy.validateQr(qr))
     qr.getJSONObject("ssh_rendezvous").put("forward_port", 0)
-    assertFailsWith<IllegalArgumentException> { EndpointPolicy.validateQr(qr) }
+    expectFailure { EndpointPolicy.validateQr(qr) }
+  }
+
+  private fun expectFailure(action: () -> Unit) {
+    try {
+      action()
+      error("expected endpoint validation failure")
+    } catch (_: IllegalArgumentException) {
+      // expected
+    }
   }
 }
