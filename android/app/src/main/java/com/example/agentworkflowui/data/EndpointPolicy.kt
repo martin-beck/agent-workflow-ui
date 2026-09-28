@@ -31,11 +31,11 @@ object EndpointPolicy {
     qr.optString("bootstrap_endpoint", endpoint).takeIf { it.isNotBlank() }?.let(::requireHttps)
     val rendezvous = qr.optJSONObject("ssh_rendezvous") ?: return endpoint
     require(rendezvous.optString("host").isNotBlank()) { "SSH rendezvous host is missing" }
-    require(rendezvous.optInt("port", -1) in 1..65535) { "SSH rendezvous port is invalid" }
+    require(rendezvous.optString("port").toIntOrNull() in 1..65535) { "SSH rendezvous port is invalid" }
     require(rendezvous.optString("host_key_fingerprint").isNotBlank()) {
       "SSH rendezvous host-key fingerprint is missing"
     }
-    require(rendezvous.optInt("forward_port", -1) in 1..65535) {
+    require(rendezvous.optString("forward_port").toIntOrNull() in 1..65535) {
       "SSH rendezvous forward port is invalid"
     }
     return endpoint
