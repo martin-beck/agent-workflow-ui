@@ -231,3 +231,10 @@ def validate_decision_message(message: dict[str, Any], *, project_id: str,
         raise ValueError("Android message comes from an unexpected device")
     if not _DIGEST.fullmatch(message["packet_digest"]):
         raise ValueError("invalid packet digest")
+    event_type = message.get("event_type")
+    if event_type not in {"acknowledge", "select", "reject", "clarify",
+                          "request-more-evidence", "add-proposal", "save",
+                          "reopen", "safe-exit", "reconciled"}:
+        raise ValueError("invalid Android decision event type")
+    if not isinstance(message.get("payload", {}), dict):
+        raise ValueError("Android decision event payload must be an object")

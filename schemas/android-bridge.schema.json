@@ -13,7 +13,7 @@
     "task_revision": {"type": "integer", "minimum": 1},
     "packet_digest": {"type": "string", "pattern": "^sha256:[A-Fa-f0-9]{64}$"},
     "sequence": {"type": "integer", "minimum": 1},
-    "event_type": {"enum": ["acknowledge", "select", "reject", "clarify", "add-proposal", "save", "reopen", "safe-exit", "reconciled"]},
+    "event_type": {"enum": ["acknowledge", "select", "reject", "clarify", "request-more-evidence", "add-proposal", "save", "reopen", "safe-exit", "reconciled"]},
     "payload": {"type": "object"}
   },
   "additionalProperties": false
