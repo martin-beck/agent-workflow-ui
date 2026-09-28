@@ -6,9 +6,12 @@ import org.json.JSONObject
 
 /** Small revision-bound client shared by registration and decision screens. */
 class AndroidBridgeClient(
-  private val endpoint: String,
+  endpoint: String,
   private val transport: HttpTransport = UrlConnectionTransport,
+  allowLoopbackHttp: Boolean = false,
 ) {
+  private val endpoint = if (allowLoopbackHttp) EndpointPolicy.requireTunnelEndpoint(endpoint)
+    else EndpointPolicy.requireHttps(endpoint)
   fun register(qr: JSONObject, publicKey: String, proofSignature: String,
                capabilities: List<String>, consent: Boolean): JSONObject =
     post("/v1/register", JSONObject().put("qr", qr).put("device_public_key", publicKey)
